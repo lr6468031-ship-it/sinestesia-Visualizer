@@ -1,0 +1,11 @@
+{
+  "appId": "com.sinestesia.visualizer",
+  "appName": "Sinestesia Visualizer",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#000000"
+  }
+}
