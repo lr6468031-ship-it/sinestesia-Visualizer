@@ -15,6 +15,7 @@ let frequencyData = null;
 let timeData = null;
 let currentObjectUrl = null;
 let animationFrame = null;
+
 let smoothedBass = 0;
 let smoothedMid = 0;
 let smoothedTreble = 0;
@@ -24,7 +25,14 @@ let detectedFamily = 'Escuchando…';
 let familyConfidence = 0;
 let familyStableFrames = 0;
 let rotation = 0;
-let pulsePhase = 0;
+
+let heldBassHz = 0;
+let bassHoldFrames = 0;
+let bassPulsePhase = 0;
+let bassPulseY = 0.5;
+let bassPulseEnergy = 0;
+let previousBassHz = 0;
+let bassChangedFlash = 0;
 
 const TAU = Math.PI * 2;
 
@@ -38,7 +46,7 @@ function ensureAudioGraph() {
 
     audioContext = new AudioCtx();
     analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048;
+    analyser.fftSize = 4096;
     analyser.smoothingTimeConstant = 0.72;
     frequencyData = new Uint8Array(analyser.frequencyBinCount);
     timeData = new Uint8Array(analyser.fftSize);
@@ -48,10 +56,7 @@ function ensureAudioGraph() {
     analyser.connect(audioContext.destination);
   }
 
-  if (audioContext.state === 'suspended') {
-    audioContext.resume();
-  }
-
+  if (audioContext.state === 'suspended') audioContext.resume();
   return true;
 }
 
@@ -77,12 +82,9 @@ function hzToBin(hz) {
 }
 
 function averageRange(minHz, maxHz) {
-  if (!audioContext || !frequencyData) return 0;
-
+  if (!frequencyData) return 0;
   const start = hzToBin(minHz);
   const end = hzToBin(maxHz);
-  if (end < start) return 0;
-
   let sum = 0;
   let count = 0;
   for (let i = start; i <= end; i += 1) {
@@ -90,6 +92,25 @@ function averageRange(minHz, maxHz) {
     count += 1;
   }
   return count ? sum / count / 255 : 0;
+}
+
+function dominantFrequency(minHz, maxHz) {
+  if (!audioContext || !frequencyData) return { hz: 0, strength: 0 };
+  const start = hzToBin(minHz);
+  const end = hzToBin(maxHz);
+  let bestIndex = start;
+  let best = 0;
+
+  for (let i = start; i <= end; i += 1) {
+    if (frequencyData[i] > best) {
+      best = frequencyData[i];
+      bestIndex = i;
+    }
+  }
+
+  const nyquist = audioContext.sampleRate / 2;
+  const hz = (bestIndex / frequencyData.length) * nyquist;
+  return { hz, strength: best / 255 };
 }
 
 function rmsLevel() {
@@ -115,7 +136,6 @@ function spectralCentroidHz() {
     weighted += hz * mag;
     total += mag;
   }
-
   return total > 0 ? weighted / total : 0;
 }
 
@@ -144,7 +164,14 @@ function lerp(current, target, amount) {
   return current + (target - current) * amount;
 }
 
+function semitoneDistance(a, b) {
+  if (a <= 0 || b <= 0) return 99;
+  return Math.abs(12 * Math.log2(a / b));
+}
+
 function classifyTimbre({ bass, mid, treble, centroid, flatness, transient, rms }) {
+  if (rms < 0.015) return { name: 'Silencio', confidence: 1 };
+
   const candidates = [];
   const add = (name, score) => candidates.push({ name, score: Math.max(0, score) });
 
@@ -159,8 +186,6 @@ function classifyTimbre({ bass, mid, treble, centroid, flatness, transient, rms 
   const second = candidates[1];
   const margin = Math.max(0, best.score - second.score);
   const confidence = Math.max(0, Math.min(1, 0.35 + margin * 0.6));
-
-  if (rms < 0.015) return { name: 'Silencio', confidence: 1 };
   return { name: best.name, confidence };
 }
 
@@ -180,42 +205,93 @@ function updateStableFamily(next) {
   }
 }
 
+function updateBassNote(bass, dominant) {
+  const audible = bass > 0.055 && dominant.strength > 0.13 && dominant.hz >= 20 && dominant.hz <= 250;
+
+  if (!audible) {
+    bassHoldFrames = Math.max(0, bassHoldFrames - 2);
+    bassPulseEnergy = lerp(bassPulseEnergy, 0, 0.11);
+    bassChangedFlash *= 0.84;
+    return;
+  }
+
+  if (heldBassHz === 0) {
+    heldBassHz = dominant.hz;
+    previousBassHz = dominant.hz;
+    bassHoldFrames = 1;
+    bassChangedFlash = 1;
+  } else {
+    const distance = semitoneDistance(dominant.hz, heldBassHz);
+    if (distance <= 0.55) {
+      heldBassHz = lerp(heldBassHz, dominant.hz, 0.12);
+      bassHoldFrames += 1;
+    } else {
+      previousBassHz = heldBassHz;
+      heldBassHz = dominant.hz;
+      bassHoldFrames = 1;
+      bassChangedFlash = 1;
+      bassPulsePhase = 0;
+    }
+  }
+
+  const normalized = Math.max(0, Math.min(1, (heldBassHz - 20) / 230));
+  bassPulseY = lerp(bassPulseY, 0.78 - normalized * 0.56, 0.18);
+  bassPulseEnergy = lerp(bassPulseEnergy, Math.max(bass, dominant.strength), 0.24);
+  bassChangedFlash *= 0.90;
+}
+
 function drawBackground(width, height) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, width, height);
 }
 
-function drawBassPulses(cx, cy, minSide, bass) {
-  const base = minSide * 0.105;
-  const coreRadius = base * (1 + bass * 0.5);
+function drawBassPulse(width, height, bass) {
+  if (bassPulseEnergy < 0.015 || heldBassHz <= 0) return;
+
+  const yCenter = height * bassPulseY;
+  const sustain = Math.min(1, bassHoldFrames / 28);
+  const amplitude = 3 + bassPulseEnergy * 22;
+  const cycles = 1.4 + (heldBassHz / 250) * 2.4;
+  const glow = 18 + bassPulseEnergy * 42 + bassChangedFlash * 26;
+  const alpha = 0.18 + bassPulseEnergy * 0.68;
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
 
-  for (let i = 0; i < 3; i += 1) {
-    const phase = (pulsePhase + i / 3) % 1;
-    const radius = coreRadius + phase * minSide * (0.18 + bass * 0.12);
-    const alpha = (1 - phase) * (0.12 + bass * 0.55);
-    ctx.strokeStyle = `rgba(108, 142, 255, ${alpha})`;
-    ctx.lineWidth = 1 + bass * 4 * (1 - phase);
-    ctx.shadowBlur = 18 + bass * 34;
-    ctx.shadowColor = 'rgba(82, 119, 255, 0.9)';
+  for (let layer = 0; layer < 3; layer += 1) {
+    const layerScale = 1 + layer * 0.13;
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, TAU);
+    const steps = 140;
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const x = width * t;
+      const collision = Math.sin(t * Math.PI) ** 1.4;
+      const wobble = Math.sin(t * TAU * cycles + bassPulsePhase) * amplitude * collision * layerScale;
+      const vibration = Math.sin(t * TAU * (cycles * 2.7) - bassPulsePhase * 0.55) * amplitude * 0.18 * (0.35 + sustain);
+      const y = yCenter + wobble + vibration;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+
+    ctx.strokeStyle = `rgba(${140 + layer * 30}, ${176 + layer * 20}, 255, ${alpha / (layer + 1)})`;
+    ctx.lineWidth = Math.max(1, 4.2 - layer * 1.15 + bassPulseEnergy * 4);
+    ctx.shadowBlur = glow;
+    ctx.shadowColor = 'rgba(94, 142, 255, 0.95)';
     ctx.stroke();
   }
 
-  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius * 1.55);
-  core.addColorStop(0, `rgba(232, 239, 255, ${0.58 + bass * 0.36})`);
-  core.addColorStop(0.25, `rgba(110, 145, 255, ${0.38 + bass * 0.44})`);
-  core.addColorStop(1, 'rgba(40, 61, 145, 0)');
-  ctx.fillStyle = core;
-  ctx.beginPath();
-  ctx.arc(cx, cy, coreRadius * 1.55, 0, TAU);
-  ctx.fill();
-  ctx.restore();
+  if (bassChangedFlash > 0.03) {
+    ctx.fillStyle = `rgba(220,235,255,${bassChangedFlash * 0.7})`;
+    ctx.shadowBlur = 34;
+    ctx.shadowColor = 'rgba(160,200,255,1)';
+    ctx.beginPath();
+    ctx.arc(width * 0.5, yCenter, 2 + bassChangedFlash * 6, 0, TAU);
+    ctx.fill();
+  }
 
-  return coreRadius;
+  ctx.restore();
 }
 
 function drawPianoSparks(cx, cy, minSide, intensity, transient) {
@@ -230,19 +306,19 @@ function drawPianoSparks(cx, cy, minSide, intensity, transient) {
     const t = i / (count - 1);
     const x = startX + span * t;
     const wave = Math.sin(rotation * 3 + i * 1.7) * 0.5 + 0.5;
-    const height = minSide * (0.05 + intensity * 0.20 + transient * 0.18) * (0.45 + wave * 0.7);
+    const sparkHeight = minSide * (0.05 + intensity * 0.20 + transient * 0.18) * (0.45 + wave * 0.7);
     const alpha = 0.12 + intensity * 0.65;
-    const grad = ctx.createLinearGradient(x, baseY, x, baseY - height);
-    grad.addColorStop(0, `rgba(255, 217, 142, ${alpha * 0.22})`);
-    grad.addColorStop(0.55, `rgba(255, 236, 190, ${alpha})`);
+    const grad = ctx.createLinearGradient(x, baseY, x, baseY - sparkHeight);
+    grad.addColorStop(0, `rgba(255,217,142,${alpha * 0.22})`);
+    grad.addColorStop(0.55, `rgba(255,236,190,${alpha})`);
     grad.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.strokeStyle = grad;
     ctx.lineWidth = 1.2 + intensity * 2.4;
     ctx.shadowBlur = 10 + intensity * 24;
-    ctx.shadowColor = 'rgba(255, 221, 160, 0.9)';
+    ctx.shadowColor = 'rgba(255,221,160,0.9)';
     ctx.beginPath();
     ctx.moveTo(x, baseY);
-    ctx.lineTo(x + Math.sin(i) * 3, baseY - height);
+    ctx.lineTo(x + Math.sin(i) * 3, baseY - sparkHeight);
     ctx.stroke();
   }
   ctx.restore();
@@ -256,9 +332,9 @@ function drawSynthRibbon(cx, cy, minSide, intensity) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineWidth = 2 + intensity * 3;
-  ctx.strokeStyle = `rgba(102, 229, 255, ${0.18 + intensity * 0.62})`;
+  ctx.strokeStyle = `rgba(102,229,255,${0.18 + intensity * 0.62})`;
   ctx.shadowBlur = 14 + intensity * 28;
-  ctx.shadowColor = 'rgba(74, 205, 255, 0.95)';
+  ctx.shadowColor = 'rgba(74,205,255,0.95)';
   ctx.beginPath();
 
   for (let i = 0; i <= points; i += 1) {
@@ -286,7 +362,7 @@ function drawPercussionFlash(cx, cy, minSide, intensity, transient) {
     const a = (i / rays) * TAU;
     const flicker = 0.7 + 0.3 * Math.sin(i * 2.3 + rotation * 5);
     const outer = outerBase * flicker;
-    ctx.strokeStyle = `rgba(255, 255, 255, ${0.06 + transient * 0.55})`;
+    ctx.strokeStyle = `rgba(255,255,255,${0.06 + transient * 0.55})`;
     ctx.lineWidth = 0.8 + transient * 2.6;
     ctx.shadowBlur = 8 + transient * 18;
     ctx.shadowColor = 'rgba(255,255,255,0.85)';
@@ -315,9 +391,9 @@ function drawTrebleStars(cx, cy, minSide, treble) {
     const y = Math.sin(angle) * orbit;
     const size = 0.6 + treble * 2.8 + (i % 4) * 0.1;
     const alpha = 0.08 + treble * 0.75;
-    ctx.fillStyle = `rgba(205, 230, 255, ${alpha})`;
+    ctx.fillStyle = `rgba(205,230,255,${alpha})`;
     ctx.shadowBlur = 4 + treble * 12;
-    ctx.shadowColor = 'rgba(164, 214, 255, 0.85)';
+    ctx.shadowColor = 'rgba(164,214,255,0.85)';
     ctx.beginPath();
     ctx.arc(x, y, size, 0, TAU);
     ctx.fill();
@@ -339,12 +415,14 @@ function drawFamilyVisual(cx, cy, minSide, family, mid, treble, transient) {
 
 function drawIdle(width, height) {
   drawBackground(width, height);
-  const minSide = Math.min(width, height);
-  const cx = width / 2;
-  const cy = height / 2;
-  drawBassPulses(cx, cy, minSide, 0.03);
-  drawSynthRibbon(cx, cy, minSide, 0.05);
-  drawTrebleStars(cx, cy, minSide, 0.03);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(110,150,255,0.14)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, height * 0.62);
+  ctx.lineTo(width, height * 0.62);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function render() {
@@ -362,6 +440,7 @@ function render() {
   const bass = averageRange(20, 250);
   const mid = averageRange(250, 4000);
   const treble = averageRange(4000, 16000);
+  const dominantBass = dominantFrequency(20, 250);
   const rms = rmsLevel();
   const transient = Math.max(0, rms - previousRms);
   previousRms = lerp(previousRms, rms, 0.42);
@@ -373,6 +452,8 @@ function render() {
   smoothedBass = lerp(smoothedBass, bass, 0.22);
   smoothedMid = lerp(smoothedMid, mid, 0.18);
   smoothedTreble = lerp(smoothedTreble, treble, 0.16);
+
+  updateBassNote(smoothedBass, dominantBass);
 
   bassValue.textContent = Math.round(smoothedBass * 100);
   midValue.textContent = Math.round(smoothedMid * 100);
@@ -391,22 +472,23 @@ function render() {
 
   if (instrumentValue) {
     const confidence = detectedFamily === 'Silencio' ? '' : ` · ${Math.round(familyConfidence * 100)}%`;
-    instrumentValue.textContent = `${detectedFamily}${confidence}`;
+    const bassNote = heldBassHz > 0 && bassHoldFrames > 0 ? ` · grave ${Math.round(heldBassHz)} Hz` : '';
+    instrumentValue.textContent = `${detectedFamily}${confidence}${bassNote}`;
   }
 
   rotation += 0.003 + smoothedTreble * 0.024;
-  pulsePhase = (pulsePhase + 0.006 + smoothedBass * 0.026) % 1;
+  bassPulsePhase += 0.035 + smoothedBass * 0.11;
 
   const minSide = Math.min(width, height);
   const cx = width / 2;
   const cy = height / 2;
 
   drawBackground(width, height);
-  drawBassPulses(cx, cy, minSide, smoothedBass);
+  drawBassPulse(width, height, smoothedBass);
   drawFamilyVisual(cx, cy, minSide, detectedFamily, smoothedMid, smoothedTreble, transientHold);
 
-  if (smoothedTreble > 0.08) {
-    drawTrebleStars(cx, cy, minSide, smoothedTreble * 0.78);
+  if (smoothedTreble > 0.08 && detectedFamily !== 'Brillo / platillos') {
+    drawTrebleStars(cx, cy, minSide, smoothedTreble * 0.64);
   }
 
   animationFrame = requestAnimationFrame(render);
@@ -426,10 +508,12 @@ audioFile.addEventListener('change', () => {
   currentObjectUrl = URL.createObjectURL(file);
   audio.src = currentObjectUrl;
   audio.load();
-  detectedFamily = 'Escuchando…';
-  familyConfidence = 0;
-  familyStableFrames = 0;
   status.textContent = `Lista: ${file.name}`;
+
+  heldBassHz = 0;
+  bassHoldFrames = 0;
+  bassPulseEnergy = 0;
+  bassChangedFlash = 0;
 
   if (ensureAudioGraph()) {
     audio.play().then(() => {
@@ -456,7 +540,9 @@ audio.addEventListener('ended', () => {
   bassValue.textContent = '0';
   midValue.textContent = '0';
   trebleValue.textContent = '0';
-  if (instrumentValue) instrumentValue.textContent = 'Sin señal';
+  heldBassHz = 0;
+  bassHoldFrames = 0;
+  bassPulseEnergy = 0;
 });
 
 window.addEventListener('resize', resizeCanvas);
