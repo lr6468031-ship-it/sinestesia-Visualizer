@@ -9,15 +9,25 @@
 </head>
 <body>
   <main class="app">
+    <input class="panel-toggle-input" id="panelToggle" type="checkbox" />
+
     <header class="topbar">
-      <div>
+      <div class="brand">
         <p class="eyebrow">SINestesia</p>
         <h1>Audio Visualizer</h1>
       </div>
-      <label class="file-button">
-        Cargar canción
-        <input id="audioFile" type="file" accept="audio/*" />
-      </label>
+
+      <div class="top-actions">
+        <label class="file-button">
+          Cargar canción
+          <input id="audioFile" type="file" accept="audio/*" />
+        </label>
+
+        <label class="panel-toggle-button" for="panelToggle" aria-label="Ocultar o mostrar controles">
+          <span class="hide-label">Minimizar</span>
+          <span class="show-label">Mostrar controles</span>
+        </label>
+      </div>
     </header>
 
     <section class="visual-area">
