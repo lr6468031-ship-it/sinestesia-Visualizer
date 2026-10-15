@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sinestesia Visualizer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">SINestesia</p>
+        <h1>Audio Visualizer</h1>
+      </div>
+      <label class="file-button">
+        Cargar canción
+        <input id="audioFile" type="file" accept="audio/*" />
+      </label>
+    </header>
+
+    <section class="stage" aria-label="Visualizador de audio">
+      <canvas id="visualizer"></canvas>
+      <div class="meter-card">
+        <div><span>Graves</span><strong id="bassValue">0</strong></div>
+        <div><span>Medios</span><strong id="midValue">0</strong></div>
+        <div><span>Agudos</span><strong id="trebleValue">0</strong></div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <audio id="audio" controls></audio>
+      <p id="status">Carga una canción para comenzar.</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
