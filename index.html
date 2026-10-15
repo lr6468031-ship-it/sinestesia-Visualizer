@@ -6,33 +6,56 @@
   <meta name="theme-color" content="#000000" />
   <title>Sinestesia Visualizer</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="controls.css" />
 </head>
 <body>
   <main class="app">
-    <input class="panel-toggle-input" id="panelToggle" type="checkbox" />
-
     <header class="topbar">
       <div class="brand">
         <p class="eyebrow">SINestesia</p>
         <h1>Audio Visualizer</h1>
-      </div>
-
-      <div class="top-actions">
-        <label class="file-button">
-          Cargar canción
-          <input id="audioFile" type="file" accept="audio/*" />
-        </label>
-
-        <label class="panel-toggle-button" for="panelToggle" aria-label="Ocultar o mostrar controles">
-          <span class="hide-label">Minimizar</span>
-          <span class="show-label">Mostrar controles</span>
-        </label>
       </div>
     </header>
 
     <section class="visual-area">
       <div class="stage" aria-label="Visualizador de audio">
         <canvas id="visualizer"></canvas>
+
+        <section id="musicDock" class="music-dock" aria-label="Controles de música">
+          <button id="dockToggle" class="dock-toggle" type="button" aria-expanded="false" aria-controls="dockPanel">
+            <span class="dock-grip" aria-hidden="true"></span>
+            <span class="dock-compact-title" id="compactTrack">Sin canción</span>
+            <span class="dock-chevron" aria-hidden="true">⌃</span>
+          </button>
+
+          <div id="dockPanel" class="dock-panel" hidden>
+            <div class="dock-header-row">
+              <div class="track-info">
+                <span class="track-label">REPRODUCIENDO</span>
+                <strong id="trackName">Sin canción cargada</strong>
+              </div>
+
+              <label class="dock-file-button">
+                Buscar música
+                <input id="audioFile" type="file" accept="audio/*" />
+              </label>
+            </div>
+
+            <div class="transport-row">
+              <button id="playPause" class="play-button" type="button" aria-label="Reproducir" disabled>▶</button>
+
+              <div class="timeline-wrap">
+                <input id="seekBar" class="seek-bar" type="range" min="0" max="1000" value="0" step="1" aria-label="Posición de la canción" disabled />
+                <div class="time-row">
+                  <span id="currentTime">0:00</span>
+                  <span id="durationTime">0:00</span>
+                </div>
+              </div>
+            </div>
+
+            <p id="status" class="dock-status">Carga una canción para comenzar.</p>
+          </div>
+        </section>
       </div>
 
       <div class="meter-card" aria-label="Niveles de frecuencia">
@@ -48,12 +71,10 @@
       </div>
     </section>
 
-    <section class="controls">
-      <audio id="audio" controls preload="metadata"></audio>
-      <p id="status">Carga una canción para comenzar.</p>
-    </section>
+    <audio id="audio" preload="metadata"></audio>
   </main>
 
   <script src="app.js"></script>
+  <script src="controls.js"></script>
 </body>
 </html>
