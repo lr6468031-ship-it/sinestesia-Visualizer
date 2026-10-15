@@ -90,7 +90,8 @@ h1 {
   gap: 10px;
 }
 
-.meter-card div {
+.meter-card div,
+.detection-card {
   min-width: 0;
   padding: 10px 12px;
   border-radius: 14px;
@@ -98,13 +99,13 @@ h1 {
   border: 1px solid rgba(255,255,255,.10);
 }
 
-.meter-card span {
+.meter-card span,
+.detection-card span {
   display: block;
   font-size: 11px;
   opacity: .62;
   text-transform: uppercase;
   letter-spacing: .08em;
-  white-space: nowrap;
 }
 
 .meter-card strong {
@@ -113,12 +114,29 @@ h1 {
   font-size: 22px;
 }
 
+.detection-card {
+  display: grid;
+  gap: 3px;
+}
+
+.detection-card strong {
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.detection-card small {
+  opacity: .54;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .controls { display: grid; gap: 8px; min-width: 0; }
 audio { width: 100%; max-width: 100%; }
 #status { margin: 0; opacity: .72; font-size: 14px; overflow-wrap: anywhere; }
 
 @media (min-width: 900px) {
-  .meter-card {
+  .meter-card,
+  .detection-card {
     max-width: 520px;
   }
 }
@@ -150,17 +168,21 @@ audio { width: 100%; max-width: 100%; }
 
   .meter-card { gap: 6px; }
 
-  .meter-card div {
+  .meter-card div,
+  .detection-card {
     padding: 9px 8px;
     border-radius: 12px;
   }
 
-  .meter-card span {
+  .meter-card span,
+  .detection-card span {
     font-size: 9px;
     letter-spacing: .04em;
   }
 
   .meter-card strong { font-size: 18px; }
+  .detection-card strong { font-size: 16px; }
+  .detection-card small { font-size: 10px; }
 
   .controls { padding-bottom: 8px; }
   #status { font-size: 13px; }
