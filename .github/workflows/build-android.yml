@@ -8,6 +8,8 @@ on:
       - 'bass-wave.js'
       - 'index.html'
       - 'styles.css'
+      - 'controls.css'
+      - 'controls.js'
       - 'package.json'
       - 'capacitor.config.json'
       - '.github/workflows/build-android.yml'
@@ -50,7 +52,7 @@ jobs:
         run: |
           rm -rf www
           mkdir -p www
-          cp index.html app.js styles.css bass-wave.js www/
+          cp index.html app.js styles.css bass-wave.js controls.css controls.js www/
 
       - name: Create Android project
         run: npx cap add android
