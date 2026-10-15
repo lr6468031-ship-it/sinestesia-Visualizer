@@ -58,6 +58,13 @@ h1 {
 .file-button:active { transform: scale(.99); }
 .file-button input { display: none; }
 
+.visual-area {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
 .stage {
   position: relative;
   width: 100%;
@@ -78,23 +85,17 @@ h1 {
 }
 
 .meter-card {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 18px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  pointer-events: none;
 }
 
 .meter-card div {
   min-width: 0;
   padding: 10px 12px;
   border-radius: 14px;
-  background: rgba(0,0,0,.62);
+  background: rgba(255,255,255,.055);
   border: 1px solid rgba(255,255,255,.10);
-  backdrop-filter: blur(12px);
 }
 
 .meter-card span {
@@ -115,6 +116,12 @@ h1 {
 .controls { display: grid; gap: 8px; min-width: 0; }
 audio { width: 100%; max-width: 100%; }
 #status { margin: 0; opacity: .72; font-size: 14px; overflow-wrap: anywhere; }
+
+@media (min-width: 900px) {
+  .meter-card {
+    max-width: 520px;
+  }
+}
 
 @media (max-width: 640px) {
   .app {
@@ -141,17 +148,11 @@ audio { width: 100%; max-width: 100%; }
     border-radius: 20px;
   }
 
-  .meter-card {
-    position: static;
-    margin-top: 10px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-  }
+  .meter-card { gap: 6px; }
 
   .meter-card div {
     padding: 9px 8px;
     border-radius: 12px;
-    background: rgba(255,255,255,.055);
   }
 
   .meter-card span {
