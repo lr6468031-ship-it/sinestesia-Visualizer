@@ -1,5 +1,6 @@
-// Fast reactive plasma ring for Sinestesia.
-// Low-latency frequency response + time-driven multicolor plasma rings.
+// Sinestesia Plasma v20 — performance-first reactive plasma.
+// Goals: larger graduated glow, low visual latency, time-cycling plasma colors,
+// and clearly visible inner rings without hundreds of expensive shadowed strokes.
 
 let plasmaPhase = 0;
 let fastReactiveEnergy = 0;
@@ -12,14 +13,31 @@ ensureAudioGraph = function ensureFastAudioGraph() {
   const ok = originalEnsureAudioGraph();
   if (!ok || !analyser) return ok;
 
-  // Smaller window + almost no analyser smoothing keeps the visuals close to the beat.
-  if (analyser.fftSize !== 1024) {
-    analyser.fftSize = 1024;
+  // 512 is enough for the three visual bands and cuts analyser work/latency in half.
+  if (analyser.fftSize !== 512) {
+    analyser.fftSize = 512;
     frequencyData = new Uint8Array(analyser.frequencyBinCount);
     timeData = new Uint8Array(analyser.fftSize);
   }
-  analyser.smoothingTimeConstant = 0.018;
+  analyser.smoothingTimeConstant = 0.025;
   return ok;
+};
+
+// The old canvas rendered at up to 2x DPR. On high-DPI phones that means ~4x pixels.
+// Cap it lower so the animation stays fluid while remaining sharp on a phone screen.
+resizeCanvas = function resizeCanvasForPlasma() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.30);
+  const width = Math.max(1, Math.round(rect.width * dpr));
+  const height = Math.max(1, Math.round(rect.height * dpr));
+
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { width: rect.width, height: rect.height };
 };
 
 paletteForFamily = function paletteForFamilyPlasmaRing() {
@@ -32,10 +50,10 @@ function followValue(current, target, attack, release) {
 
 function fastBeatSignal() {
   if (!analyser || !frequencyData || audio.paused) {
-    fastReactiveEnergy *= 0.56;
-    smoothBass *= 0.62;
-    smoothMid *= 0.62;
-    smoothTreble *= 0.62;
+    fastReactiveEnergy *= 0.52;
+    smoothBass *= 0.58;
+    smoothMid *= 0.58;
+    smoothTreble *= 0.58;
     return { bass: smoothBass, mid: smoothMid, treble: smoothTreble, energy: fastReactiveEnergy };
   }
 
@@ -44,18 +62,18 @@ function fastBeatSignal() {
   const trebleNow = averageRange(2800, 12500);
   const rms = rmsLevel();
 
-  // Fast attack fixes the delayed/laggy feeling. Release is slower so it does not flicker.
-  smoothBass = followValue(smoothBass, bassNow, 0.88, 0.23);
-  smoothMid = followValue(smoothMid, midNow, 0.82, 0.20);
-  smoothTreble = followValue(smoothTreble, trebleNow, 0.86, 0.21);
+  // Immediate attack, gentler release: follows hits without strobing between frames.
+  smoothBass = followValue(smoothBass, bassNow, 0.94, 0.27);
+  smoothMid = followValue(smoothMid, midNow, 0.91, 0.24);
+  smoothTreble = followValue(smoothTreble, trebleNow, 0.93, 0.25);
 
   const target = clamp(
-    rms * 1.95 +
-    smoothBass * 0.78 +
-    smoothMid * 0.26 +
-    smoothTreble * 0.15
+    rms * 2.08 +
+    smoothBass * 0.82 +
+    smoothMid * 0.30 +
+    smoothTreble * 0.18
   );
-  fastReactiveEnergy = followValue(fastReactiveEnergy, target, 0.90, 0.18);
+  fastReactiveEnergy = followValue(fastReactiveEnergy, target, 0.95, 0.22);
 
   return { bass: smoothBass, mid: smoothMid, treble: smoothTreble, energy: fastReactiveEnergy };
 }
@@ -66,7 +84,7 @@ function periodicPulse(angle, center, width) {
 }
 
 function sectorSignals(angle, bass, mid, treble) {
-  // 0 = right, PI/2 = bottom, PI = left, 3PI/2 = top.
+  // 0 right, PI/2 bottom, PI left, 3PI/2 top.
   const bassWeight = periodicPulse(angle, Math.PI * 0.5, 1.02);
   const midWeight = Math.min(1,
     periodicPulse(angle, 0, 0.92) + periodicPulse(angle, Math.PI, 0.92)
@@ -81,17 +99,17 @@ function sectorSignals(angle, bass, mid, treble) {
 
 function localEnergy(angle, bass, mid, treble, energy) {
   const s = sectorSignals(angle, bass, mid, treble);
-  return clamp(s.bass * 1.03 + s.mid * 0.92 + s.treble * 1.00 + energy * 0.10);
+  return clamp(s.bass * 1.06 + s.mid * 0.96 + s.treble * 1.03 + energy * 0.12);
 }
 
 const plasmaPalette = [
-  [255, 118, 26],   // orange
-  [255, 247, 222],  // white
-  [255, 220, 55],   // yellow
-  [189, 72, 255],   // grape / violet
-  [76, 232, 132],   // plasma green
-  [69, 205, 255],   // cyan
-  [120, 82, 255],   // blue-violet bridge
+  [255, 116, 24],
+  [255, 248, 226],
+  [255, 220, 54],
+  [190, 70, 255],
+  [72, 236, 130],
+  [62, 210, 255],
+  [114, 78, 255],
 ];
 
 function mixColor(a, b, t) {
@@ -114,19 +132,35 @@ function timeColor(angle, timeSeconds, speed = 0.42, offset = 0) {
   return plasmaColorAt(around + timeSeconds * speed + offset);
 }
 
-function drawGlobalHalo(cx, cy, baseRadius, energy) {
-  const bloom = Math.pow(clamp(energy), 0.95);
-  const over = clamp((energy - 0.62) / 0.38);
-  const outer = baseRadius * (1.45 + bloom * 0.10 + over * 0.08);
+function rgba(c, a) {
+  return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
+}
+
+function makeConicPlasma(cx, cy, startAngle, alpha = 1) {
+  if (typeof ctx.createConicGradient !== 'function') return null;
+  const grad = ctx.createConicGradient(startAngle, cx, cy);
+  const n = plasmaPalette.length;
+  for (let i = 0; i <= n; i += 1) {
+    const c = plasmaPalette[i % n];
+    grad.addColorStop(i / n, rgba(c, alpha));
+  }
+  return grad;
+}
+
+function drawGlobalHalo(cx, cy, baseRadius, energy, timeSeconds) {
+  const bloom = Math.pow(clamp(energy), 0.88);
+  const over = clamp((energy - 0.58) / 0.42);
+  const outer = baseRadius * (1.54 + bloom * 0.12 + over * 0.07);
+  const tint = timeColor(Math.PI * 1.5, timeSeconds, 0.10, 1.2);
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  const halo = ctx.createRadialGradient(cx, cy, baseRadius * 0.90, cx, cy, outer);
+  const halo = ctx.createRadialGradient(cx, cy, baseRadius * 0.91, cx, cy, outer);
   halo.addColorStop(0, 'rgba(0,0,0,0)');
-  halo.addColorStop(0.36, `rgba(57, 127, 255, ${0.026 + bloom * 0.055})`);
-  halo.addColorStop(0.58, `rgba(110, 62, 255, ${0.055 + bloom * 0.095})`);
-  halo.addColorStop(0.77, `rgba(190, 58, 255, ${0.052 + bloom * 0.105})`);
-  halo.addColorStop(0.92, `rgba(234, 96, 255, ${0.015 + over * 0.045})`);
+  halo.addColorStop(0.30, rgba(tint, 0.035 + bloom * 0.070));
+  halo.addColorStop(0.52, rgba([102, 66, 255], 0.075 + bloom * 0.120));
+  halo.addColorStop(0.72, rgba([184, 58, 255], 0.072 + bloom * 0.135));
+  halo.addColorStop(0.88, rgba(tint, 0.025 + bloom * 0.070));
   halo.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = halo;
   ctx.beginPath();
@@ -135,32 +169,42 @@ function drawGlobalHalo(cx, cy, baseRadius, energy) {
   ctx.restore();
 }
 
-function drawReactiveAura(cx, cy, baseRadius, bass, mid, treble, energy, timeSeconds) {
+function drawReactiveBandArc(cx, cy, radius, start, end, strength, color, widthScale = 1) {
+  if (strength <= 0.01) return;
+  const boosted = Math.pow(clamp(strength), 0.78);
+
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
 
-  // Fewer segments than before = noticeably smoother on phones.
-  const segments = 64;
-  const step = TAU / segments;
+  ctx.strokeStyle = rgba(color, 0.10 + boosted * 0.18);
+  ctx.lineWidth = (12 + boosted * 17) * widthScale;
+  ctx.shadowBlur = 20 + boosted * 24;
+  ctx.shadowColor = rgba(color, 0.65);
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + boosted * 2.0, start, end);
+  ctx.stroke();
 
-  for (let i = 0; i < segments; i += 1) {
-    const angle = i * step;
-    const local = localEnergy(angle, bass, mid, treble, energy);
-    const c = timeColor(angle, timeSeconds, 0.16, 2.35);
-    const over = clamp((local - 0.58) / 0.42);
-    const radius = baseRadius * (1.028 + local * 0.006);
-
-    ctx.strokeStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${0.045 + local * 0.155})`;
-    ctx.lineWidth = 9.5 + local * 8.5 + over * 2.5;
-    ctx.shadowBlur = 22 + local * 28;
-    ctx.shadowColor = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${0.28 + local * 0.48})`;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, angle - step * 0.62, angle + step * 0.62);
-    ctx.stroke();
-  }
-
+  ctx.strokeStyle = rgba(color, 0.28 + boosted * 0.38);
+  ctx.lineWidth = (3.0 + boosted * 4.5) * widthScale;
+  ctx.shadowBlur = 9 + boosted * 12;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, start, end);
+  ctx.stroke();
   ctx.restore();
+}
+
+function drawFrequencyBands(cx, cy, baseRadius, bass, mid, treble, energy, timeSeconds) {
+  const bassColor = timeColor(Math.PI * 0.5, timeSeconds, 0.22, 0.0);
+  const rightColor = timeColor(0, timeSeconds, 0.22, 1.4);
+  const leftColor = timeColor(Math.PI, timeSeconds, 0.22, 3.0);
+  const highColor = timeColor(Math.PI * 1.5, timeSeconds, 0.22, 4.7);
+
+  const floor = energy * 0.18;
+  drawReactiveBandArc(cx, cy, baseRadius * 1.036, 0.15 * Math.PI, 0.85 * Math.PI, bass + floor, bassColor, 1.05);
+  drawReactiveBandArc(cx, cy, baseRadius * 1.030, -0.34 * Math.PI, 0.34 * Math.PI, mid + floor * 0.8, rightColor, 0.92);
+  drawReactiveBandArc(cx, cy, baseRadius * 1.030, 0.66 * Math.PI, 1.34 * Math.PI, mid + floor * 0.8, leftColor, 0.92);
+  drawReactiveBandArc(cx, cy, baseRadius * 1.034, 1.16 * Math.PI, 1.84 * Math.PI, treble + floor, highColor, 0.96);
 }
 
 function drawFrequencyFlames(cx, cy, baseRadius, bass, mid, treble, energy, timeSeconds) {
@@ -168,76 +212,51 @@ function drawFrequencyFlames(cx, cy, baseRadius, bass, mid, treble, energy, time
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
 
-  const count = 30;
+  const count = 16;
   for (let i = 0; i < count; i += 1) {
     const angle = (i / count) * TAU;
     const local = localEnergy(angle, bass, mid, treble, energy);
-    const c = timeColor(angle, timeSeconds, 0.18, 3.1);
-
-    const phase = timeSeconds * (1.1 + (i % 4) * 0.06) + i * 1.37;
-    const irregular = 0.88 + Math.sin(phase * 0.72) * 0.12;
-    const over = clamp((local - 0.56) / 0.44);
+    const c = timeColor(angle, timeSeconds, 0.24, 2.2);
+    const phase = timeSeconds * (1.55 + (i % 3) * 0.08) + i * 1.71;
+    const irregular = 0.86 + Math.sin(phase * 0.74) * 0.14;
+    const over = clamp((local - 0.52) / 0.48);
 
     const nx = Math.cos(angle);
     const ny = Math.sin(angle);
     const tx = -ny;
     const ty = nx;
-    const startR = baseRadius * (1.022 + Math.sin(phase * 0.34) * 0.0015);
-    const length = baseRadius * (0.055 + local * 0.125 + over * 0.045) * irregular;
-    const bend = Math.sin(phase * 0.65) * baseRadius * (0.004 + local * 0.008);
+    const startR = baseRadius * 1.025;
+    const length = baseRadius * (0.070 + local * 0.175 + over * 0.050) * irregular;
+    const bend = Math.sin(phase * 0.70) * baseRadius * (0.004 + local * 0.011);
 
     const x0 = cx + nx * startR;
     const y0 = cy + ny * startR;
     const x1 = cx + nx * (startR + length);
     const y1 = cy + ny * (startR + length);
 
-    const alpha = 0.065 + local * 0.13;
+    const alpha = 0.075 + local * 0.175;
     const grad = ctx.createLinearGradient(x0, y0, x1, y1);
-    grad.addColorStop(0, `rgba(245, 228, 255, ${alpha * 0.52})`);
-    grad.addColorStop(0.16, `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`);
-    grad.addColorStop(0.46, `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha * 0.86})`);
-    grad.addColorStop(0.74, `rgba(132, 58, 255, ${alpha * 0.42})`);
-    grad.addColorStop(0.91, `rgba(95, 39, 255, ${alpha * 0.14})`);
-    grad.addColorStop(1, 'rgba(75, 28, 255, 0)');
+    grad.addColorStop(0, `rgba(250,244,255,${alpha * 0.58})`);
+    grad.addColorStop(0.15, rgba(c, alpha));
+    grad.addColorStop(0.46, rgba(c, alpha * 0.88));
+    grad.addColorStop(0.72, `rgba(132,58,255,${alpha * 0.44})`);
+    grad.addColorStop(0.90, `rgba(94,38,255,${alpha * 0.15})`);
+    grad.addColorStop(1, 'rgba(74,26,255,0)');
 
     ctx.strokeStyle = grad;
-    ctx.lineWidth = baseRadius * (0.032 + local * 0.023);
-    ctx.shadowBlur = baseRadius * (0.060 + local * 0.070);
-    ctx.shadowColor = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${0.34 + local * 0.42})`;
+    ctx.lineWidth = baseRadius * (0.040 + local * 0.028);
+    ctx.shadowBlur = baseRadius * (0.038 + local * 0.040);
+    ctx.shadowColor = rgba(c, 0.62);
     ctx.beginPath();
     ctx.moveTo(x0, y0);
     ctx.bezierCurveTo(
-      x0 + nx * length * 0.28 + tx * bend,
-      y0 + ny * length * 0.28 + ty * bend,
-      x0 + nx * length * 0.68 - tx * bend * 0.35,
-      y0 + ny * length * 0.68 - ty * bend * 0.35,
+      x0 + nx * length * 0.26 + tx * bend,
+      y0 + ny * length * 0.26 + ty * bend,
+      x0 + nx * length * 0.69 - tx * bend * 0.35,
+      y0 + ny * length * 0.69 - ty * bend * 0.35,
       x1,
       y1,
     );
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawReactiveEdge(cx, cy, baseRadius, bass, mid, treble, energy, timeSeconds) {
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.lineCap = 'round';
-
-  const segments = 72;
-  const step = TAU / segments;
-  for (let i = 0; i < segments; i += 1) {
-    const angle = i * step;
-    const local = localEnergy(angle, bass, mid, treble, energy);
-    const c = timeColor(angle, timeSeconds, 0.12, 4.0);
-    const radius = baseRadius * (1.012 + local * 0.0027);
-
-    ctx.strokeStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${0.38 + local * 0.48})`;
-    ctx.lineWidth = 1.7 + local * 2.2;
-    ctx.shadowBlur = 8 + local * 15;
-    ctx.shadowColor = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${0.48 + local * 0.40})`;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, angle - step * 0.61, angle + step * 0.61);
     ctx.stroke();
   }
   ctx.restore();
@@ -248,30 +267,77 @@ function drawInnerPlasmaRings(cx, cy, baseRadius, energy, timeSeconds) {
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
 
-  // Two clearly visible rings INSIDE the white ring.
-  const rings = [
-    { radius: 0.962, width: 2.25, blur: 7.5, alpha: 0.86, speed: 0.54, offset: 0.0 },
-    { radius: 0.932, width: 1.45, blur: 5.0, alpha: 0.66, speed: -0.34, offset: 2.6 },
-  ];
-  const segments = 64;
-  const step = TAU / segments;
+  const ringA = makeConicPlasma(cx, cy, timeSeconds * 0.85, 0.96);
+  const ringB = makeConicPlasma(cx, cy, -timeSeconds * 0.58 + 1.8, 0.82);
 
-  for (const ring of rings) {
-    for (let i = 0; i < segments; i += 1) {
-      const angle = i * step;
-      const c = timeColor(angle, timeSeconds, ring.speed, ring.offset);
-      const pulse = 0.94 + 0.06 * Math.sin(timeSeconds * 2.0 + angle * 2.2 + ring.offset);
-      const alpha = ring.alpha * pulse * (0.90 + energy * 0.10);
+  if (ringA && ringB) {
+    ctx.strokeStyle = ringA;
+    ctx.lineWidth = 3.0 + energy * 0.7;
+    ctx.shadowBlur = 10 + energy * 6;
+    ctx.shadowColor = 'rgba(140,90,255,0.85)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, baseRadius * 0.962, 0, TAU);
+    ctx.stroke();
 
-      ctx.strokeStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`;
-      ctx.lineWidth = ring.width + energy * 0.35;
-      ctx.shadowBlur = ring.blur + energy * 3.0;
-      ctx.shadowColor = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${0.72 + energy * 0.20})`;
-      ctx.beginPath();
-      ctx.arc(cx, cy, baseRadius * ring.radius, angle - step * 0.64, angle + step * 0.64);
-      ctx.stroke();
+    ctx.strokeStyle = ringB;
+    ctx.lineWidth = 2.0 + energy * 0.45;
+    ctx.shadowBlur = 7 + energy * 4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, baseRadius * 0.925, 0, TAU);
+    ctx.stroke();
+  } else {
+    const rings = [
+      { radius: 0.962, width: 2.8, speed: 0.85, offset: 0 },
+      { radius: 0.925, width: 1.9, speed: -0.58, offset: 2.2 },
+    ];
+    const segments = 24;
+    const step = TAU / segments;
+    for (const ring of rings) {
+      for (let i = 0; i < segments; i += 1) {
+        const angle = i * step;
+        const c = timeColor(angle, timeSeconds, ring.speed, ring.offset);
+        ctx.strokeStyle = rgba(c, 0.90);
+        ctx.lineWidth = ring.width;
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = rgba(c, 0.8);
+        ctx.beginPath();
+        ctx.arc(cx, cy, baseRadius * ring.radius, angle - step * 0.58, angle + step * 0.58);
+        ctx.stroke();
+      }
     }
   }
+
+  ctx.restore();
+}
+
+function drawMainCore(cx, cy, baseRadius, energy, timeSeconds) {
+  const bloom = Math.pow(clamp(energy), 0.92);
+  const over = clamp((energy - 0.60) / 0.40);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+
+  const rimGradient = makeConicPlasma(cx, cy, timeSeconds * 0.36 + 0.6, 0.72);
+  if (rimGradient) {
+    ctx.strokeStyle = rimGradient;
+  } else {
+    const c = timeColor(Math.PI * 1.5, timeSeconds, 0.30, 1.0);
+    ctx.strokeStyle = rgba(c, 0.65);
+  }
+  ctx.lineWidth = 3.4 + bloom * 1.5;
+  ctx.shadowBlur = 14 + bloom * 13;
+  ctx.shadowColor = 'rgba(162,82,255,0.82)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, baseRadius * 1.018, 0, TAU);
+  ctx.stroke();
+
+  ctx.strokeStyle = `rgba(244,252,255,${0.82 + bloom * 0.16})`;
+  ctx.lineWidth = 1.45 + bloom * 0.75;
+  ctx.shadowBlur = 10 + bloom * 12 + over * 4;
+  ctx.shadowColor = `rgba(110,222,255,${0.84 + bloom * 0.14})`;
+  ctx.beginPath();
+  ctx.arc(cx, cy, baseRadius * 0.998, 0, TAU);
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -288,8 +354,8 @@ drawBackground = function drawPlasmaRingBackground(width, height) {
     height * 0.43,
     Math.max(width, height) * 0.56,
   );
-  glow.addColorStop(0, 'rgba(20, 8, 54, 0.12)');
-  glow.addColorStop(0.50, 'rgba(8, 4, 28, 0.06)');
+  glow.addColorStop(0, 'rgba(20,8,54,0.13)');
+  glow.addColorStop(0.52, 'rgba(8,4,28,0.065)');
   glow.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, width, height);
@@ -302,57 +368,29 @@ drawAurora = function drawPlasmaRing(width, height) {
   const treble = fast.treble;
   const energy = fast.energy;
   const timeSeconds = performance.now() * 0.001;
-
-  // Phase is time-led, not accumulated from audio, so motion stays smooth at any FPS.
   plasmaPhase = timeSeconds;
 
   const cx = width * 0.5;
   const cy = height * 0.43;
   const minSide = Math.min(width, height);
-  const baseRadius = minSide * (0.273 + bass * 0.0045 + energy * 0.0025);
-  const bloom = Math.pow(clamp(energy), 1.02);
-  const overdrive = clamp((energy - 0.64) / 0.36);
+  const baseRadius = minSide * (0.273 + bass * 0.004 + energy * 0.002);
 
-  drawGlobalHalo(cx, cy, baseRadius, energy);
-  drawReactiveAura(cx, cy, baseRadius, bass, mid, treble, energy, timeSeconds);
+  drawGlobalHalo(cx, cy, baseRadius, energy, timeSeconds);
+  drawFrequencyBands(cx, cy, baseRadius, bass, mid, treble, energy, timeSeconds);
   drawFrequencyFlames(cx, cy, baseRadius, bass, mid, treble, energy, timeSeconds);
-  drawReactiveEdge(cx, cy, baseRadius, bass, mid, treble, energy, timeSeconds);
 
-  // Clean black center first, leaving a wider band for the inner color rings.
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#000000';
   ctx.beginPath();
-  ctx.arc(cx, cy, baseRadius * 0.900, 0, TAU);
+  ctx.arc(cx, cy, baseRadius * 0.885, 0, TAU);
   ctx.fill();
   ctx.restore();
 
   drawInnerPlasmaRings(cx, cy, baseRadius, energy, timeSeconds);
-
-  // Main white/cyan core ring stays bright but not blown out.
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = `rgba(242, 251, 255, ${0.78 + bloom * 0.19})`;
-  ctx.lineWidth = 1.20 + bloom * 0.62;
-  ctx.shadowBlur = 9 + bloom * 11 + overdrive * 3;
-  ctx.shadowColor = `rgba(111, 220, 255, ${0.82 + bloom * 0.17})`;
-  ctx.beginPath();
-  ctx.arc(cx, cy, baseRadius * 0.998, 0, TAU);
-  ctx.stroke();
-
-  // Thin colored rim right outside the white core.
-  const rim = timeColor(Math.PI * 1.5, timeSeconds, 0.22, 1.3);
-  ctx.strokeStyle = `rgba(${rim[0]}, ${rim[1]}, ${rim[2]}, ${0.24 + bloom * 0.19})`;
-  ctx.lineWidth = 1.05 + bloom * 0.36;
-  ctx.shadowBlur = 12 + bloom * 10;
-  ctx.shadowColor = `rgba(${rim[0]}, ${rim[1]}, ${rim[2]}, ${0.48 + bloom * 0.28})`;
-  ctx.beginPath();
-  ctx.arc(cx, cy, baseRadius * 1.015, 0, TAU);
-  ctx.stroke();
-  ctx.restore();
+  drawMainCore(cx, cy, baseRadius, energy, timeSeconds);
 };
 
-// Plasma skin owns the whole visual; legacy accents stay disabled.
 drawBassWave = function drawPlasmaRingWave() {};
 drawPendulum = function drawPlasmaRingPendulum() {};
 drawSnareBolts = function drawPlasmaRingSnareBolts() {};
