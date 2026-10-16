@@ -2,13 +2,25 @@
 // Loaded after app.js so it replaces only the drawing layer.
 
 let plasmaPhase = 0;
+let fastReactiveEnergy = 0;
+
+// Keep the same visual design, but make the analyser respond faster to the beat.
+const originalEnsureAudioGraph = ensureAudioGraph;
+ensureAudioGraph = function ensureFastAudioGraph() {
+  const ok = originalEnsureAudioGraph();
+  if (!ok || !analyser) return ok;
+
+  if (analyser.fftSize !== 2048) {
+    analyser.fftSize = 2048;
+    frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    timeData = new Uint8Array(analyser.fftSize);
+  }
+  analyser.smoothingTimeConstant = 0.16;
+  return ok;
+};
 
 paletteForFamily = function paletteForFamilyPlasmaRing() {
-  return {
-    h1: 214, // electric blue
-    h2: 248, // violet-blue
-    h3: 278, // violet
-  };
+  return { h1: 214, h2: 248, h3: 278 };
 };
 
 function plasmaNoise(seed) {
@@ -18,10 +30,25 @@ function plasmaNoise(seed) {
 
 function spectrumAt(progress) {
   if (!frequencyData || !frequencyData.length) return 0;
-  // The first ~28% of the spectrum gives a musical but stable ring response.
   const maxBin = Math.max(1, Math.floor(frequencyData.length * 0.28));
   const index = Math.min(maxBin - 1, Math.floor(progress * maxBin));
   return frequencyData[index] / 255;
+}
+
+function fastBeatSignal() {
+  if (!analyser || !frequencyData) return { bass: 0, mid: 0, treble: 0, energy: 0 };
+
+  const bass = averageRange(35, 180);
+  const mid = averageRange(180, 2500);
+  const treble = averageRange(2500, 12000);
+  const rms = rmsLevel();
+  const target = clamp(rms * 2.15 + bass * 0.72 + mid * 0.20 + treble * 0.08);
+
+  // Very fast attack, gentler release: the ring hits on the beat without flickering.
+  const amount = target > fastReactiveEnergy ? 0.82 : 0.20;
+  fastReactiveEnergy += (target - fastReactiveEnergy) * amount;
+
+  return { bass, mid, treble, energy: fastReactiveEnergy };
 }
 
 drawBackground = function drawPlasmaRingBackground(width, height) {
@@ -41,22 +68,24 @@ drawBackground = function drawPlasmaRingBackground(width, height) {
 };
 
 drawAurora = function drawPlasmaRing(width, height, energy) {
-  plasmaPhase += 0.0035 + energy * 0.012;
+  const fast = fastBeatSignal();
+  const visualEnergy = Math.max(energy * 0.72, fast.energy);
+  const bass = Math.max(smoothedBass || 0, fast.bass * 0.95);
+  const mid = Math.max(smoothedMid || 0, fast.mid * 0.8);
+  const treble = Math.max(smoothedTreble || 0, fast.treble * 0.85);
+
+  plasmaPhase += 0.0035 + visualEnergy * 0.012;
 
   const cx = width * 0.5;
   const cy = height * 0.43;
   const minSide = Math.min(width, height);
-  const bass = typeof smoothedBass === 'number' ? smoothedBass : 0;
-  const mid = typeof smoothedMid === 'number' ? smoothedMid : 0;
-  const treble = typeof smoothedTreble === 'number' ? smoothedTreble : 0;
-  const baseRadius = minSide * (0.275 + bass * 0.014 + energy * 0.008);
+  const baseRadius = minSide * (0.275 + bass * 0.014 + visualEnergy * 0.008);
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // A hollow halo: dark in the middle, violet glow only around the circumference.
   const halo = ctx.createRadialGradient(
     cx,
     cy,
@@ -67,17 +96,17 @@ drawAurora = function drawPlasmaRing(width, height, energy) {
   );
   halo.addColorStop(0, 'rgba(0,0,0,0)');
   halo.addColorStop(0.42, 'rgba(0,0,0,0)');
-  halo.addColorStop(0.64, `rgba(28, 67, 255, ${0.045 + energy * 0.05})`);
-  halo.addColorStop(0.76, `rgba(83, 30, 255, ${0.11 + energy * 0.10})`);
-  halo.addColorStop(0.86, `rgba(177, 45, 255, ${0.07 + energy * 0.08})`);
+  halo.addColorStop(0.64, `rgba(28, 67, 255, ${0.045 + visualEnergy * 0.05})`);
+  halo.addColorStop(0.76, `rgba(83, 30, 255, ${0.11 + visualEnergy * 0.10})`);
+  halo.addColorStop(0.86, `rgba(177, 45, 255, ${0.07 + visualEnergy * 0.08})`);
   halo.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = halo;
   ctx.beginPath();
   ctx.arc(cx, cy, baseRadius * 1.48, 0, TAU);
   ctx.fill();
 
-  // Short radial flames around the outside, like the reference image.
-  const rayCount = 240;
+  // Same plasma look with fewer internal segments, reducing frame drops on mobile.
+  const rayCount = 160;
   for (let i = 0; i < rayCount; i += 1) {
     const p = i / rayCount;
     const angle = p * TAU;
@@ -91,7 +120,7 @@ drawAurora = function drawPlasmaRing(width, height, energy) {
       + n1 * 0.045
       + wave * 0.018
       + musical * (0.045 + treble * 0.035)
-      + spike * (0.05 + energy * 0.05)
+      + spike * (0.05 + visualEnergy * 0.05)
     );
     const innerR = baseRadius * (0.985 + (n1 - 0.5) * 0.010);
     const outerR = innerR + flame;
@@ -101,10 +130,10 @@ drawAurora = function drawPlasmaRing(width, height, energy) {
     const y2 = cy + Math.sin(angle) * outerR;
 
     const hue = 218 + 58 * (0.5 + 0.5 * Math.sin(angle * 1.7 + plasmaPhase));
-    const alpha = 0.16 + energy * 0.16 + musical * 0.18;
+    const alpha = 0.16 + visualEnergy * 0.16 + musical * 0.18;
     ctx.strokeStyle = `hsla(${hue},100%,70%,${alpha})`;
-    ctx.lineWidth = 0.45 + n1 * 1.0 + energy * 0.65;
-    ctx.shadowBlur = 5 + energy * 10;
+    ctx.lineWidth = 0.45 + n1 * 1.0 + visualEnergy * 0.65;
+    ctx.shadowBlur = 5 + visualEnergy * 10;
     ctx.shadowColor = `hsla(${hue},100%,62%,0.8)`;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -112,13 +141,12 @@ drawAurora = function drawPlasmaRing(width, height, energy) {
     ctx.stroke();
   }
 
-  // Outer soft violet filament.
-  ctx.strokeStyle = `rgba(164, 71, 255, ${0.34 + energy * 0.18})`;
-  ctx.lineWidth = 2.2 + energy * 1.8;
-  ctx.shadowBlur = 34 + energy * 25;
+  ctx.strokeStyle = `rgba(164, 71, 255, ${0.34 + visualEnergy * 0.18})`;
+  ctx.lineWidth = 2.2 + visualEnergy * 1.8;
+  ctx.shadowBlur = 34 + visualEnergy * 25;
   ctx.shadowColor = 'rgba(117, 43, 255, 0.95)';
   ctx.beginPath();
-  const outerSteps = 320;
+  const outerSteps = 220;
   for (let i = 0; i <= outerSteps; i += 1) {
     const p = i / outerSteps;
     const angle = p * TAU;
@@ -134,7 +162,6 @@ drawAurora = function drawPlasmaRing(width, height, energy) {
   ctx.closePath();
   ctx.stroke();
 
-  // Bright electric-blue core. Kept thin and circular so the center stays empty.
   const coreGradient = ctx.createLinearGradient(cx - baseRadius, cy, cx + baseRadius, cy);
   coreGradient.addColorStop(0, 'rgba(43, 118, 255, 0.94)');
   coreGradient.addColorStop(0.28, 'rgba(96, 66, 255, 0.98)');
@@ -142,11 +169,11 @@ drawAurora = function drawPlasmaRing(width, height, energy) {
   coreGradient.addColorStop(0.80, 'rgba(126, 55, 255, 0.98)');
   coreGradient.addColorStop(1, 'rgba(41, 111, 255, 0.94)');
   ctx.strokeStyle = coreGradient;
-  ctx.lineWidth = 1.35 + energy * 0.9;
-  ctx.shadowBlur = 13 + energy * 15;
+  ctx.lineWidth = 1.35 + visualEnergy * 0.9;
+  ctx.shadowBlur = 13 + visualEnergy * 15;
   ctx.shadowColor = 'rgba(55, 108, 255, 1)';
   ctx.beginPath();
-  const coreSteps = 360;
+  const coreSteps = 240;
   for (let i = 0; i <= coreSteps; i += 1) {
     const p = i / coreSteps;
     const angle = p * TAU;
@@ -162,10 +189,9 @@ drawAurora = function drawPlasmaRing(width, height, energy) {
   ctx.closePath();
   ctx.stroke();
 
-  // Hairline white-blue highlight for the crisp plasma edge seen in the reference.
-  ctx.strokeStyle = `rgba(180, 221, 255, ${0.48 + energy * 0.22})`;
-  ctx.lineWidth = 0.55 + energy * 0.35;
-  ctx.shadowBlur = 6 + energy * 8;
+  ctx.strokeStyle = `rgba(180, 221, 255, ${0.48 + visualEnergy * 0.22})`;
+  ctx.lineWidth = 0.55 + visualEnergy * 0.35;
+  ctx.shadowBlur = 6 + visualEnergy * 8;
   ctx.shadowColor = 'rgba(112, 172, 255, 0.95)';
   ctx.beginPath();
   ctx.arc(cx, cy, baseRadius * 0.998, 0, TAU);
@@ -174,10 +200,7 @@ drawAurora = function drawPlasmaRing(width, height, energy) {
   ctx.restore();
 };
 
-// The reference has an empty center: no horizontal waveform.
 drawBassWave = function drawPlasmaRingWave() {};
-
-// Remove the legacy overlays so only the plasma ring remains.
 drawPendulum = function drawPlasmaRingPendulum() {};
 drawSnareBolts = function drawPlasmaRingSnareBolts() {};
 drawFamilyAccent = function drawPlasmaRingFamilyAccent() {};
