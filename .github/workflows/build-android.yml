@@ -8,6 +8,7 @@ on:
       - 'bass-wave.js'
       - 'plasma-visualizer.js'
       - 'fluid-visualizer.js'
+      - 'visual-intensity.js'
       - 'plasma-webgl.js'
       - 'plasma-webgpu.js'
       - 'index.html'
@@ -56,7 +57,7 @@ jobs:
         run: |
           rm -rf www
           mkdir -p www
-          cp index.html app.js styles.css bass-wave.js plasma-visualizer.js fluid-visualizer.js plasma-webgl.js plasma-webgpu.js controls.css controls.js www/
+          cp index.html app.js styles.css bass-wave.js plasma-visualizer.js fluid-visualizer.js visual-intensity.js plasma-webgl.js plasma-webgpu.js controls.css controls.js www/
           echo "Packaged assets:"
           ls -lh www
 
@@ -70,6 +71,7 @@ jobs:
         run: |
           test -f android/app/src/main/assets/public/plasma-webgl.js
           test -f android/app/src/main/assets/public/plasma-webgpu.js
+          test -f android/app/src/main/assets/public/visual-intensity.js
           grep -q "Plasma Ultra" android/app/src/main/assets/public/index.html
 
       - name: Build debug APK
