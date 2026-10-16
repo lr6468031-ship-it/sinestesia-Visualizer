@@ -15,6 +15,11 @@
         <p class="eyebrow">SINestesia</p>
         <h1>Audio Visualizer</h1>
       </div>
+      <div class="visual-options">
+        <label>Estilo <select id="visualMode"><option value="fluid">Fluido 23</option><option value="plasma">Plasma anterior</option></select></label>
+        <label>Intensidad <input id="fluidIntensity" type="range" min="0.7" max="2" step="0.05" value="1.35" /></label>
+        <small id="visualNotice" role="status"></small>
+      </div>
     </header>
 
     <section class="visual-area">
@@ -76,6 +81,8 @@
 
   <script src="app.js"></script>
   <script src="plasma-visualizer.js"></script>
+  <script src="fluid-visualizer.js"></script>
   <script src="controls.js"></script>
 </body>
 </html>
+

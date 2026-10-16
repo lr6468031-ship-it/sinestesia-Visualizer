@@ -7,6 +7,7 @@ on:
       - 'app.js'
       - 'bass-wave.js'
       - 'plasma-visualizer.js'
+      - 'fluid-visualizer.js'
       - 'index.html'
       - 'styles.css'
       - 'controls.css'
@@ -53,7 +54,7 @@ jobs:
         run: |
           rm -rf www
           mkdir -p www
-          cp index.html app.js styles.css bass-wave.js plasma-visualizer.js controls.css controls.js www/
+          cp index.html app.js styles.css bass-wave.js plasma-visualizer.js fluid-visualizer.js controls.css controls.js www/
 
       - name: Create Android project
         run: npx cap add android
@@ -73,3 +74,4 @@ jobs:
           name: sinestesia-visualizer-plasma-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+

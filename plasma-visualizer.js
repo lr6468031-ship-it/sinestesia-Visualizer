@@ -425,7 +425,7 @@ function plasmaFrame(now) {
     bassValue.textContent = Math.round(smoothBass * 100);
     midValue.textContent = Math.round(smoothMid * 100);
     trebleValue.textContent = Math.round(smoothTreble * 100);
-    if (instrumentValue) instrumentValue.textContent = 'Plasma 22 · ' + (audio.paused ? 'En pausa' : 'Intenso · color lento');
+    if (instrumentValue) instrumentValue.textContent = (window.sinestesiaFluidActive ? 'Fluido 23 · ' : 'Plasma 22 · ') + (audio.paused ? 'En pausa' : 'Intenso · color lento');
   }
   animationFrame = requestAnimationFrame(plasmaFrame);
 }
@@ -435,3 +435,4 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) animationFrame = requestAnimationFrame(plasmaFrame);
 });
 animationFrame = requestAnimationFrame(plasmaFrame);
+
