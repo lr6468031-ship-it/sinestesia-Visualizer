@@ -3,6 +3,7 @@
 
 let plasmaPhase = 0;
 let fastReactiveEnergy = 0;
+let glowIntensity = 0;
 
 const originalEnsureAudioGraph = ensureAudioGraph;
 ensureAudioGraph = function ensureLowLatencyAudioGraph() {
@@ -47,6 +48,31 @@ function fastBeatSignal() {
   return { bass, mid, treble, energy: fastReactiveEnergy };
 }
 
+function getGlowDynamics(fast) {
+  // Perceptual loudness estimate. Bass drives most of the bloom, while mids and highs
+  // add a smaller amount so bright passages also feel more luminous.
+  const raw = clamp(
+    fast.energy * 0.72 +
+    fast.bass * 0.18 +
+    fast.mid * 0.07 +
+    fast.treble * 0.03
+  );
+
+  const target = Math.pow(raw, 0.82);
+  const follow = target > glowIntensity ? 0.48 : 0.13;
+  glowIntensity += (target - glowIntensity) * follow;
+
+  const intensity = clamp(glowIntensity);
+
+  // Above ~64% intensity, excess light is pushed into a wider gradient instead
+  // of making the core turn into a flat white line.
+  const overdrive = clamp((intensity - 0.64) / 0.36);
+  const spread = 1 + intensity * 0.05 + overdrive * 0.24;
+  const coreCompression = 1 - overdrive * 0.07;
+
+  return { intensity, overdrive, spread, coreCompression };
+}
+
 function periodicPulse(angle, center, width) {
   const d = Math.atan2(Math.sin(angle - center), Math.cos(angle - center));
   return Math.exp(-(d * d) / Math.max(0.0001, width * width));
@@ -86,7 +112,6 @@ function drawPlasmaBand(cx, cy, baseRadius, options) {
     const musical = spectrumAt(p);
     const wave = organicWave(angle, offset, speed);
 
-    // Several moving blooms distributed around the full circumference.
     const blooms =
       periodicPulse(angle, plasmaPhase * 0.19 + 0.2, 0.34) * 0.40 +
       periodicPulse(angle, plasmaPhase * -0.15 + 1.75, 0.39) * 0.34 +
@@ -111,13 +136,13 @@ function drawPlasmaBand(cx, cy, baseRadius, options) {
   ctx.stroke();
 }
 
-function drawCircumferenceWisps(cx, cy, baseRadius, energy, bass, treble) {
+function drawCircumferenceWisps(cx, cy, baseRadius, energy, bass, treble, overdrive) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
 
   const count = 36;
-  const idleLift = 0.075;
+  const idleLift = 0.055;
 
   for (let i = 0; i < count; i += 1) {
     const p = i / count;
@@ -134,9 +159,10 @@ function drawCircumferenceWisps(cx, cy, baseRadius, energy, bass, treble) {
     const length = baseRadius * (
       idleLift +
       audio * 0.095 +
-      energy * 0.070 +
+      energy * 0.078 +
       treble * 0.035 +
-      (0.5 + 0.5 * Math.sin(phase)) * 0.055
+      overdrive * 0.055 +
+      (0.5 + 0.5 * Math.sin(phase)) * 0.050
     );
 
     const bend = Math.sin(phase * 0.83) * baseRadius * (0.018 + treble * 0.018);
@@ -145,7 +171,7 @@ function drawCircumferenceWisps(cx, cy, baseRadius, energy, bass, treble) {
     const x1 = cx + nx * (startR + length);
     const y1 = cy + ny * (startR + length);
 
-    const alpha = 0.055 + energy * 0.070 + audio * 0.050;
+    const alpha = 0.025 + energy * 0.105 + audio * 0.045;
     const grad = ctx.createLinearGradient(x0, y0, x1, y1);
     grad.addColorStop(0, `rgba(78, 180, 255, ${alpha * 0.95})`);
     grad.addColorStop(0.25, `rgba(100, 100, 255, ${alpha})`);
@@ -154,8 +180,8 @@ function drawCircumferenceWisps(cx, cy, baseRadius, energy, bass, treble) {
     grad.addColorStop(1, 'rgba(131, 45, 255, 0)');
 
     ctx.strokeStyle = grad;
-    ctx.lineWidth = baseRadius * (0.026 + energy * 0.010 + audio * 0.008);
-    ctx.shadowBlur = baseRadius * (0.075 + energy * 0.035);
+    ctx.lineWidth = baseRadius * (0.018 + energy * 0.016 + audio * 0.007 + overdrive * 0.006);
+    ctx.shadowBlur = baseRadius * (0.045 + energy * 0.070 + overdrive * 0.025);
     ctx.shadowColor = 'rgba(127, 64, 255, 0.95)';
 
     ctx.beginPath();
@@ -174,20 +200,20 @@ function drawCircumferenceWisps(cx, cy, baseRadius, energy, bass, treble) {
   ctx.restore();
 }
 
-function drawEnergyTail(cx, cy, baseRadius, energy, bass) {
+function drawEnergyTail(cx, cy, baseRadius, energy, bass, overdrive) {
   const startY = cy + baseRadius * 0.965;
-  const endY = startY + baseRadius * (0.72 + energy * 0.26);
-  const sway = Math.sin(plasmaPhase * 2.25) * baseRadius * (0.020 + energy * 0.016);
+  const endY = startY + baseRadius * (0.68 + energy * 0.30 + overdrive * 0.08);
+  const sway = Math.sin(plasmaPhase * 2.25) * baseRadius * (0.018 + energy * 0.017);
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
 
   const layers = [
-    { width: 18 + energy * 13, alpha: 0.050, blur: 31 },
-    { width: 8.5 + energy * 6.5, alpha: 0.16, blur: 20 },
-    { width: 3.0 + energy * 2.2, alpha: 0.64, blur: 11 },
-    { width: 1.0 + energy * 0.8, alpha: 0.96, blur: 5 },
+    { width: 11 + energy * 16 + overdrive * 7, alpha: 0.018 + energy * 0.050, blur: 24 + overdrive * 14 },
+    { width: 5.5 + energy * 9 + overdrive * 4, alpha: 0.055 + energy * 0.13, blur: 14 + overdrive * 10 },
+    { width: 2.0 + energy * 3.2, alpha: 0.24 + energy * 0.42, blur: 7 + overdrive * 6 },
+    { width: 0.8 + energy * 1.0, alpha: 0.48 + energy * 0.48, blur: 3 + overdrive * 3 },
   ];
 
   for (const layer of layers) {
@@ -216,9 +242,9 @@ function drawEnergyTail(cx, cy, baseRadius, energy, bass) {
 
   for (const side of [-1, 1]) {
     const split = side * baseRadius * (0.016 + bass * 0.012);
-    ctx.strokeStyle = `rgba(102, 100, 255, ${0.06 + energy * 0.10})`;
-    ctx.lineWidth = 0.9 + bass * 0.9;
-    ctx.shadowBlur = 9;
+    ctx.strokeStyle = `rgba(102, 100, 255, ${0.025 + energy * 0.13})`;
+    ctx.lineWidth = 0.7 + bass * 0.9 + energy * 0.4;
+    ctx.shadowBlur = 6 + overdrive * 6;
     ctx.shadowColor = 'rgba(105, 68, 255, 0.8)';
     ctx.beginPath();
     ctx.moveTo(cx + split, startY + baseRadius * 0.02);
@@ -248,8 +274,8 @@ drawBackground = function drawPlasmaRingBackground(width, height) {
     height * 0.43,
     Math.max(width, height) * 0.60,
   );
-  glow.addColorStop(0, 'rgba(23, 8, 57, 0.16)');
-  glow.addColorStop(0.46, 'rgba(10, 5, 31, 0.10)');
+  glow.addColorStop(0, 'rgba(23, 8, 57, 0.12)');
+  glow.addColorStop(0.46, 'rgba(10, 5, 31, 0.075)');
   glow.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, width, height);
@@ -261,6 +287,10 @@ drawAurora = function drawPlasmaRing(width, height) {
   const bass = fast.bass;
   const mid = fast.mid;
   const treble = fast.treble;
+  const glow = getGlowDynamics(fast);
+  const brightness = glow.intensity;
+  const overdrive = glow.overdrive;
+  const spread = glow.spread;
 
   plasmaPhase += 0.0042 + visualEnergy * 0.017;
 
@@ -274,47 +304,49 @@ drawAurora = function drawPlasmaRing(width, height) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // First wide halo: blue-violet atmospheric light.
+  // Wide atmospheric halo. Quiet music stays subtle; loud music expands outward.
+  const haloOuter = baseRadius * (1.43 + brightness * 0.10 + overdrive * 0.22);
   const halo = ctx.createRadialGradient(
     cx, cy, baseRadius * 0.78,
-    cx, cy, baseRadius * (1.58 + visualEnergy * 0.06),
+    cx, cy, haloOuter,
   );
   halo.addColorStop(0, 'rgba(0,0,0,0)');
-  halo.addColorStop(0.40, `rgba(28, 91, 255, ${0.035 + visualEnergy * 0.045})`);
-  halo.addColorStop(0.58, `rgba(82, 55, 255, ${0.095 + visualEnergy * 0.085})`);
-  halo.addColorStop(0.73, `rgba(158, 47, 255, ${0.105 + visualEnergy * 0.095})`);
-  halo.addColorStop(0.87, `rgba(225, 70, 255, ${0.050 + visualEnergy * 0.050})`);
+  halo.addColorStop(0.40, `rgba(28, 91, 255, ${0.010 + brightness * 0.060})`);
+  halo.addColorStop(0.58, `rgba(82, 55, 255, ${0.018 + brightness * 0.125})`);
+  halo.addColorStop(0.73, `rgba(158, 47, 255, ${0.022 + brightness * 0.145})`);
+  halo.addColorStop(0.87, `rgba(225, 70, 255, ${0.010 + brightness * 0.075})`);
   halo.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(cx, cy, baseRadius * 1.60, 0, TAU);
+  ctx.arc(cx, cy, haloOuter, 0, TAU);
   ctx.fill();
 
-  // Second glow layer: closer and brighter, matching the extra luminous shell in the reference.
+  // Near shell. When intensity gets very high the shell becomes wider and softer,
+  // producing the requested gradient instead of clipping into a solid bright band.
+  const shellOuter = baseRadius * (1.18 + brightness * 0.07 + overdrive * 0.13);
   const shell = ctx.createRadialGradient(
     cx, cy, baseRadius * 0.91,
-    cx, cy, baseRadius * (1.28 + visualEnergy * 0.035),
+    cx, cy, shellOuter,
   );
   shell.addColorStop(0, 'rgba(0,0,0,0)');
-  shell.addColorStop(0.36, `rgba(41, 149, 255, ${0.055 + visualEnergy * 0.055})`);
-  shell.addColorStop(0.57, `rgba(106, 80, 255, ${0.15 + visualEnergy * 0.12})`);
-  shell.addColorStop(0.75, `rgba(194, 65, 255, ${0.13 + visualEnergy * 0.11})`);
+  shell.addColorStop(0.34, `rgba(41, 149, 255, ${0.018 + brightness * 0.095})`);
+  shell.addColorStop(0.56, `rgba(106, 80, 255, ${0.032 + brightness * 0.205})`);
+  shell.addColorStop(0.74, `rgba(194, 65, 255, ${0.028 + brightness * 0.185})`);
   shell.addColorStop(1, 'rgba(151, 46, 255, 0)');
   ctx.fillStyle = shell;
   ctx.beginPath();
-  ctx.arc(cx, cy, baseRadius * 1.31, 0, TAU);
+  ctx.arc(cx, cy, shellOuter, 0, TAU);
   ctx.fill();
 
-  // Broad smoky plasma skins around the entire sphere.
-  const smokeAmp = 0.016 + treble * 0.007 + visualEnergy * 0.013;
+  const smokeAmp = 0.012 + treble * 0.006 + visualEnergy * 0.011;
   drawPlasmaBand(cx, cy, baseRadius * 1.058, {
     steps: 190,
     offset: 0.35,
     amplitude: smokeAmp * 1.50,
     speed: 1.45,
-    color: `rgba(221, 65, 255, ${0.10 + visualEnergy * 0.11})`,
-    widthPx: 18 + visualEnergy * 10,
-    blurPx: 46 + visualEnergy * 22,
+    color: `rgba(221, 65, 255, ${0.025 + brightness * 0.19})`,
+    widthPx: (10 + brightness * 16 + overdrive * 8) * spread,
+    blurPx: (20 + brightness * 40 + overdrive * 24) * spread,
     audioAmount: 0.70,
     bloomAmount: 0.90,
   });
@@ -324,26 +356,24 @@ drawAurora = function drawPlasmaRing(width, height) {
     offset: 2.10,
     amplitude: smokeAmp * 1.12,
     speed: 1.88,
-    color: `rgba(139, 72, 255, ${0.16 + visualEnergy * 0.15})`,
-    widthPx: 11 + visualEnergy * 7,
-    blurPx: 34 + visualEnergy * 20,
+    color: `rgba(139, 72, 255, ${0.045 + brightness * 0.255})`,
+    widthPx: (6 + brightness * 10 + overdrive * 5) * spread,
+    blurPx: (15 + brightness * 29 + overdrive * 18) * spread,
     audioAmount: 0.82,
     bloomAmount: 0.72,
   });
 
-  // Fine flame-like plasma now wraps all 360 degrees, not just the top.
-  drawCircumferenceWisps(cx, cy, baseRadius, visualEnergy, bass, treble);
+  drawCircumferenceWisps(cx, cy, baseRadius, brightness, bass, treble, overdrive);
 
-  // Main violet and blue ring body.
-  const bodyAmp = 0.009 + treble * 0.0045 + visualEnergy * 0.007;
+  const bodyAmp = 0.007 + treble * 0.0042 + visualEnergy * 0.0065;
   drawPlasmaBand(cx, cy, baseRadius * 1.024, {
     steps: 230,
     offset: 1.20,
     amplitude: bodyAmp * 1.22,
     speed: 2.35,
-    color: `rgba(148, 82, 255, ${0.43 + visualEnergy * 0.29})`,
-    widthPx: 7.8 + visualEnergy * 3.8,
-    blurPx: 27 + visualEnergy * 18,
+    color: `rgba(148, 82, 255, ${0.15 + brightness * 0.62})`,
+    widthPx: 3.6 + brightness * 7.0 + overdrive * 2.3,
+    blurPx: 8 + brightness * 28 + overdrive * 14,
     audioAmount: 0.92,
     bloomAmount: 0.64,
   });
@@ -353,39 +383,41 @@ drawAurora = function drawPlasmaRing(width, height) {
     offset: 3.45,
     amplitude: bodyAmp * 0.86,
     speed: 2.85,
-    color: `rgba(50, 151, 255, ${0.62 + visualEnergy * 0.30})`,
-    widthPx: 5.0 + visualEnergy * 2.7,
-    blurPx: 19 + visualEnergy * 13,
+    color: `rgba(50, 151, 255, ${0.20 + brightness * 0.68})`,
+    widthPx: 2.8 + brightness * 5.0 + overdrive * 1.8,
+    blurPx: 7 + brightness * 21 + overdrive * 10,
     audioAmount: 1.02,
     bloomAmount: 0.48,
   });
 
-  // Bright cyan filament just outside the white core.
+  // Cyan filament: its brightness follows the music strongly, but width grows only a little.
   drawPlasmaBand(cx, cy, baseRadius * 1.002, {
     steps: 260,
     offset: 5.10,
-    amplitude: 0.0032 + treble * 0.0022 + visualEnergy * 0.0025,
+    amplitude: 0.0025 + treble * 0.0022 + visualEnergy * 0.0023,
     speed: 3.45,
-    color: `rgba(76, 219, 255, ${0.88 + visualEnergy * 0.10})`,
-    widthPx: 2.35 + visualEnergy * 1.20,
-    blurPx: 13 + visualEnergy * 11,
+    color: `rgba(76, 219, 255, ${(0.30 + brightness * 0.67) * glow.coreCompression})`,
+    widthPx: 1.1 + brightness * 2.25,
+    blurPx: 4 + brightness * 15 + overdrive * 8,
     audioAmount: 0.84,
     bloomAmount: 0.18,
   });
 
-  // White-hot core. Brighter and thicker than the previous version.
-  ctx.strokeStyle = `rgba(236, 250, 255, ${0.90 + visualEnergy * 0.10})`;
-  ctx.lineWidth = 1.65 + visualEnergy * 0.95;
-  ctx.shadowBlur = 14 + visualEnergy * 13;
+  // White-hot core. At extreme levels, some energy is intentionally moved into the
+  // surrounding gradient so the center keeps texture instead of blowing out completely.
+  const coreAlpha = clamp((0.30 + brightness * 0.70) * glow.coreCompression);
+  ctx.strokeStyle = `rgba(236, 250, 255, ${coreAlpha})`;
+  ctx.lineWidth = 0.8 + brightness * 1.9 + overdrive * 0.35;
+  ctx.shadowBlur = 3 + brightness * 17 + overdrive * 10;
   ctx.shadowColor = 'rgba(110, 220, 255, 1)';
   ctx.beginPath();
   ctx.arc(cx, cy, baseRadius * 0.995, 0, TAU);
   ctx.stroke();
 
-  // A thin magenta-white rim gives the reference-style layered edge.
-  ctx.strokeStyle = `rgba(229, 156, 255, ${0.36 + visualEnergy * 0.23})`;
-  ctx.lineWidth = 1.8 + visualEnergy * 0.8;
-  ctx.shadowBlur = 20 + visualEnergy * 14;
+  const magentaAlpha = 0.08 + brightness * 0.43;
+  ctx.strokeStyle = `rgba(229, 156, 255, ${magentaAlpha})`;
+  ctx.lineWidth = 0.7 + brightness * 2.0 + overdrive * 0.7;
+  ctx.shadowBlur = 6 + brightness * 22 + overdrive * 14;
   ctx.shadowColor = 'rgba(210, 74, 255, 0.95)';
   ctx.beginPath();
   ctx.arc(cx, cy, baseRadius * 1.016, 0, TAU);
@@ -393,9 +425,8 @@ drawAurora = function drawPlasmaRing(width, height) {
 
   ctx.restore();
 
-  drawEnergyTail(cx, cy, baseRadius, visualEnergy, bass);
+  drawEnergyTail(cx, cy, baseRadius, brightness, bass, overdrive);
 
-  // Repaint center black so all glow hugs the ring instead of filling the disc.
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#000000';
@@ -413,7 +444,7 @@ drawAurora = function drawPlasmaRing(width, height) {
   );
   innerGlow.addColorStop(0, 'rgba(0,0,0,0)');
   innerGlow.addColorStop(0.76, 'rgba(0,0,0,0)');
-  innerGlow.addColorStop(1, `rgba(21, 102, 174, ${0.13 + mid * 0.065})`);
+  innerGlow.addColorStop(1, `rgba(21, 102, 174, ${0.035 + brightness * 0.11 + mid * 0.035})`);
   ctx.fillStyle = innerGlow;
   ctx.beginPath();
   ctx.arc(cx, cy, baseRadius * 0.974, 0, TAU);
