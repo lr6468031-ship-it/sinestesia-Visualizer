@@ -1,5 +1,5 @@
 // Sinestesia Plasma Ultra: WebGPU + WGSL ray-marched volumetric plasma.
-// WebGL plasma remains the automatic fallback when WebGPU is unavailable.
+// Performance-tuned for mobile while keeping the electric translucent look.
 (() => {
   'use strict';
 
@@ -32,8 +32,9 @@
   let bindGroup = null;
   let ready = false;
   let failed = false;
-  let quality = 1.0;
+  let quality = 0.92;
   let slowFrames = 0;
+  let fastFrames = 0;
   let lastFrameAt = 0;
 
   const shader = `
@@ -81,8 +82,8 @@ fn noise3(p: vec3<f32>) -> f32 {
 fn fbm(p0: vec3<f32>) -> f32 {
   var p = p0;
   var value = 0.0;
-  var amp = 0.52;
-  for (var i: i32 = 0; i < 4; i = i + 1) {
+  var amp = 0.54;
+  for (var i: i32 = 0; i < 3; i = i + 1) {
     value = value + amp * noise3(p);
     p = p * 2.03 + vec3<f32>(13.7, 9.2, 17.1);
     amp = amp * 0.49;
@@ -107,7 +108,7 @@ fn plasmaMap(pin: vec3<f32>) -> f32 {
 
   let coarse = fbm(p * 1.92 + vec3<f32>(u.time * 0.085, -u.time * 0.060, u.time * 0.045));
   let warp = fbm(p * 3.18 + vec3<f32>(coarse * 2.05, -coarse * 1.45, u.time * 0.070));
-  let detail = fbm(p * 5.65 + vec3<f32>(-u.time * 0.055, u.time * 0.040, coarse * 2.35));
+  let detail = noise3(p * 5.65 + vec3<f32>(-u.time * 0.055, u.time * 0.040, coarse * 2.35));
 
   let len = max(length(p), 0.0001);
   let dir = p / len;
@@ -119,16 +120,21 @@ fn plasmaMap(pin: vec3<f32>) -> f32 {
   let fold = sin(p.x * 3.9 + p.y * 2.4 - u.time * 0.29 + coarse * 5.7) * 0.042;
   let fold2 = sin(p.z * 4.9 - p.y * 2.8 + u.time * 0.22 + warp * 4.7) * 0.030;
   let breathing = sin(u.time * 0.66) * 0.012 + u.energy * 0.030;
-  let radius = 0.715 + (coarse - 0.5) * 0.215 + (warp - 0.5) * 0.112 + (detail - 0.5) * 0.028 + fold + fold2 + audioBulge + breathing;
+  let radius = 0.715 + (coarse - 0.5) * 0.215 + (warp - 0.5) * 0.112 + (detail - 0.5) * 0.024 + fold + fold2 + audioBulge + breathing;
   return len - radius;
 }
 
 fn normalAt(p: vec3<f32>) -> vec3<f32> {
-  let e = 0.0048;
-  let dx = plasmaMap(p + vec3<f32>(e, 0.0, 0.0)) - plasmaMap(p - vec3<f32>(e, 0.0, 0.0));
-  let dy = plasmaMap(p + vec3<f32>(0.0, e, 0.0)) - plasmaMap(p - vec3<f32>(0.0, e, 0.0));
-  let dz = plasmaMap(p + vec3<f32>(0.0, 0.0, e)) - plasmaMap(p - vec3<f32>(0.0, 0.0, e));
-  return normalize(vec3<f32>(dx, dy, dz));
+  let e = 0.0060;
+  let k1 = vec3<f32>(1.0, -1.0, -1.0);
+  let k2 = vec3<f32>(-1.0, -1.0, 1.0);
+  let k3 = vec3<f32>(-1.0, 1.0, -1.0);
+  let k4 = vec3<f32>(1.0, 1.0, 1.0);
+  let n = k1 * plasmaMap(p + k1 * e)
+        + k2 * plasmaMap(p + k2 * e)
+        + k3 * plasmaMap(p + k3 * e)
+        + k4 * plasmaMap(p + k4 * e);
+  return normalize(n);
 }
 
 fn palette(t0: f32) -> vec3<f32> {
@@ -139,26 +145,18 @@ fn palette(t0: f32) -> vec3<f32> {
   let violet = vec3<f32>(0.42, 0.055, 1.02);
   let magenta = vec3<f32>(1.05, 0.025, 0.50);
 
-  if (t < 0.22) {
-    return mix(deepBlue, blue, t / 0.22);
-  }
-  if (t < 0.47) {
-    return mix(blue, cyan, (t - 0.22) / 0.25);
-  }
-  if (t < 0.68) {
-    return mix(cyan, violet, (t - 0.47) / 0.21);
-  }
-  if (t < 0.84) {
-    return mix(violet, magenta, (t - 0.68) / 0.16);
-  }
+  if (t < 0.22) { return mix(deepBlue, blue, t / 0.22); }
+  if (t < 0.47) { return mix(blue, cyan, (t - 0.22) / 0.25); }
+  if (t < 0.68) { return mix(cyan, violet, (t - 0.47) / 0.21); }
+  if (t < 0.84) { return mix(violet, magenta, (t - 0.68) / 0.16); }
   return mix(magenta, deepBlue, (t - 0.84) / 0.16);
 }
 
 fn filamentField(p: vec3<f32>, phase: f32) -> f32 {
-  let a = fbm(p * 5.2 + vec3<f32>(u.time * 0.12, -u.time * 0.08, phase * 2.1));
-  let b = fbm(p * 9.4 + vec3<f32>(-u.time * 0.07, a * 2.7, u.time * 0.09));
-  let wave = sin(a * 20.0 - b * 11.0 + p.y * 7.0 + p.z * 4.0 - u.time * 1.05 + phase);
-  return pow(max(0.0, 1.0 - abs(wave)), 10.0);
+  let a = fbm(p * 5.0 + vec3<f32>(u.time * 0.11, -u.time * 0.07, phase * 2.0));
+  let b = noise3(p * 8.2 + vec3<f32>(-u.time * 0.06, a * 2.5, u.time * 0.08));
+  let wave = sin(a * 19.0 - b * 10.0 + p.y * 6.6 + p.z * 3.7 - u.time * 0.96 + phase);
+  return pow(max(0.0, 1.0 - abs(wave)), 9.0);
 }
 
 @vertex
@@ -186,20 +184,18 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
   var minAbs = 10.0;
   var haze = 0.0;
 
-  for (var step: i32 = 0; step < 64; step = step + 1) {
+  for (var step: i32 = 0; step < 42; step = step + 1) {
     p = ro + rd * travel;
     let d = plasmaMap(p);
     let ad = abs(d);
     minAbs = min(minAbs, ad);
-    haze = haze + exp(-ad * 23.0) * 0.0082;
-    if (ad < 0.0038) {
+    haze = haze + exp(-ad * 22.0) * 0.0080;
+    if (ad < 0.0044) {
       hit = true;
       break;
     }
-    travel = travel + clamp(ad * 0.68, 0.008, 0.082);
-    if (travel > 4.25) {
-      break;
-    }
+    travel = travel + clamp(ad * 0.74, 0.010, 0.095);
+    if (travel > 4.25) { break; }
   }
 
   var color = vec3<f32>(0.0, 0.0, 0.0);
@@ -217,8 +213,8 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let fresnel = pow(1.0 - max(dot(n, viewDir), 0.0), 2.0);
 
     let flow1 = fbm(p * 3.45 + vec3<f32>(u.time * 0.095, -u.time * 0.064, u.time * 0.044));
-    let flow2 = fbm(p * 6.65 + vec3<f32>(-u.time * 0.060, flow1 * 2.65, u.time * 0.080));
-    let flow3 = fbm(p * 10.2 + vec3<f32>(flow2 * 2.15, u.time * 0.040, -u.time * 0.055));
+    let flow2 = fbm(p * 6.25 + vec3<f32>(-u.time * 0.060, flow1 * 2.55, u.time * 0.080));
+    let flow3 = noise3(p * 9.2 + vec3<f32>(flow2 * 2.0, u.time * 0.040, -u.time * 0.055));
     let ribbons = 0.5 + 0.5 * sin(flow1 * 13.0 + flow2 * 7.2 + p.y * 4.3 - u.time * 0.54);
     let veins = pow(max(0.0, 1.0 - abs(sin(flow2 * 23.0 - flow3 * 12.0 + p.x * 6.4 + u.time * 0.39))), 9.0);
 
@@ -227,20 +223,19 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let light = 0.10 + diffuseA * 0.43 + diffuseB * 0.13;
     surfaceColor = surfaceColor * light * (0.70 + u.energy * 0.20);
 
-    // Internal samples make the body read as translucent plasma instead of painted marble.
     var internal = vec3<f32>(0.0);
     var transmittance = 1.0;
-    for (var layer: i32 = 0; layer < 6; layer = layer + 1) {
-      let depth = 0.035 + f32(layer) * 0.060;
+    for (var layer: i32 = 0; layer < 3; layer = layer + 1) {
+      let depth = 0.045 + f32(layer) * 0.090;
       let vp = p + rd * depth;
-      let volumeA = fbm(vp * 4.6 + vec3<f32>(u.time * 0.075, -u.time * 0.052, f32(layer) * 0.61));
-      let volumeB = fbm(vp * 8.1 + vec3<f32>(-u.time * 0.050, volumeA * 2.8, u.time * 0.064));
-      let filament = filamentField(vp, f32(layer) * 0.73);
-      let depthPhase = phase + volumeA * 0.26 + volumeB * 0.13 + depth * 0.42;
-      var layerColor = palette(depthPhase) * (0.038 + volumeA * 0.055);
-      layerColor = layerColor + vec3<f32>(0.18, 0.88, 1.34) * filament * (0.18 + u.treble * 0.40 + u.energy * 0.16);
+      let volumeA = fbm(vp * 4.35 + vec3<f32>(u.time * 0.070, -u.time * 0.050, f32(layer) * 0.61));
+      let volumeB = noise3(vp * 7.5 + vec3<f32>(-u.time * 0.048, volumeA * 2.6, u.time * 0.060));
+      let filament = filamentField(vp, f32(layer) * 0.79);
+      let depthPhase = phase + volumeA * 0.28 + volumeB * 0.14 + depth * 0.42;
+      var layerColor = palette(depthPhase) * (0.050 + volumeA * 0.068);
+      layerColor = layerColor + vec3<f32>(0.18, 0.88, 1.34) * filament * (0.23 + u.treble * 0.43 + u.energy * 0.18);
       internal = internal + layerColor * transmittance;
-      transmittance = transmittance * 0.76;
+      transmittance = transmittance * 0.68;
     }
 
     let edgeElectric = vec3<f32>(0.03, 0.72, 1.35) * fresnel * (0.52 + u.mid * 0.52);
@@ -254,7 +249,7 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let innerPulse = 0.5 + 0.5 * sin(u.time * 1.12 + flow1 * 5.3);
     let pulseGlow = palette(phase + 0.31) * innerPulse * u.bass * 0.10;
 
-    color = color + surfaceColor * 0.60 + internal * 1.02 + electricVeins + edgeElectric + sharpSpark + pulseGlow;
+    color = color + surfaceColor * 0.62 + internal * 1.24 + electricVeins + edgeElectric + sharpSpark + pulseGlow;
   } else {
     let edgeAura = exp(-minAbs * 12.0) * (0.085 + u.energy * 0.34);
     let auraColor = mix(vec3<f32>(0.01, 0.23, 0.95), vec3<f32>(0.00, 0.91, 1.20), clamp(uv.y + 0.45, 0.0, 1.0));
@@ -358,18 +353,32 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     }
 
     const now = performance.now();
-    if (!audio.paused && lastFrameAt && now - lastFrameAt > 44) slowFrames += 1;
-    else slowFrames = Math.max(0, slowFrames - 1);
+    const frameMs = lastFrameAt ? now - lastFrameAt : 0;
     lastFrameAt = now;
-    if (slowFrames > 45) {
-      quality = Math.max(0.58, quality - 0.08);
-      slowFrames = 0;
+
+    if (!audio.paused && frameMs > 36) {
+      slowFrames += 1;
+      fastFrames = 0;
+    } else if (frameMs > 0 && frameMs < 26) {
+      fastFrames += 1;
+      slowFrames = Math.max(0, slowFrames - 1);
+    } else {
+      slowFrames = Math.max(0, slowFrames - 1);
+      fastFrames = Math.max(0, fastFrames - 1);
     }
 
-    const maxPixels = 500000;
+    if (slowFrames > 18) {
+      quality = Math.max(0.48, quality - 0.10);
+      slowFrames = 0;
+    } else if (fastFrames > 180) {
+      quality = Math.min(0.92, quality + 0.04);
+      fastFrames = 0;
+    }
+
+    const maxPixels = 320000;
     const dpr = Math.min(
       window.devicePixelRatio || 1,
-      1.40,
+      1.15,
       Math.sqrt(maxPixels / Math.max(1, width * height)),
     ) * quality;
     const w = Math.max(1, Math.round(width * dpr));
@@ -388,7 +397,7 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
       signal.mid,
       signal.treble,
       signal.energy,
-      1.16 + signal.energy * 0.20,
+      1.14 + signal.energy * 0.18,
     ]);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
 
