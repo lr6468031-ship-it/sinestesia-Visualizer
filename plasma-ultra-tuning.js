@@ -1,178 +1,47 @@
-// Final visual tuning: wide diffuse plasma rays using only the core plasma palette.
+// Plasma Ultra tuning: broad diffuse plasma bands inspired by the supplied reference.
+function tunedRingPath(cx, cy, radius, signal, scale) { return buildContourPath(cx, cy, radius * scale, signal); }
 
-function tunedRingPath(cx, cy, radius, signal, scale) {
-  return buildContourPath(cx, cy, radius * scale, signal);
-}
-
-// Restricted plasma palette: white-hot core -> violet -> electric blue.
-// Deliberately excludes green, yellow and rainbow/LED cycling.
+// Reference palette: electric blue -> violet -> fuchsia -> hot white.
 function plasmaColorAtPhase(phase, alpha = 1) {
-  const hue = ((phase % 1) + 1) % 1;
-  const stops = [
-    [0.00, [247, 250, 255]],
-    [0.18, [205, 180, 255]],
-    [0.38, [177, 64, 255]],
-    [0.62, [92, 82, 255]],
-    [0.82, [55, 105, 255]],
-    [1.00, [247, 250, 255]],
-  ];
-  let a = stops[0], b = stops[stops.length - 1];
-  for (let i = 0; i < stops.length - 1; i += 1) {
-    if (hue >= stops[i][0] && hue <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
-  }
-  const span = Math.max(0.0001, b[0] - a[0]);
-  const t = (hue - a[0]) / span;
-  const rgb = a[1].map((v, i) => Math.round(v + (b[1][i] - v) * t));
-  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+  const h = ((phase % 1) + 1) % 1;
+  const stops = [[0,[48,105,255]],[0.25,[83,38,255]],[0.52,[143,45,255]],[0.72,[235,79,255]],[0.88,[255,188,250]],[1,[248,253,255]]];
+  let a=stops[0],b=stops[stops.length-1];
+  for(let i=0;i<stops.length-1;i++){if(h>=stops[i][0]&&h<=stops[i+1][0]){a=stops[i];b=stops[i+1];break;}}
+  const t=(h-a[0])/Math.max(.0001,b[0]-a[0]); const c=a[1].map((v,i)=>Math.round(v+(b[1][i]-v)*t));
+  return `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
+}
+function makePlasmaGradient(cx,cy,time,alpha=1){
+  if(typeof ctx.createConicGradient!=='function') return plasmaColorAtPhase(time*.05,alpha);
+  const g=ctx.createConicGradient(time*.035*TAU-.75,cx,cy);
+  [[0,[48,105,255]],[.24,[83,38,255]],[.50,[143,45,255]],[.72,[235,79,255]],[.88,[255,188,250]],[1,[248,253,255]]].forEach(([p,c])=>g.addColorStop(p,`rgba(${c[0]},${c[1]},${c[2]},${alpha})`)); return g;
 }
 
-function makePlasmaGradient(cx, cy, time, alpha = 1) {
-  if (typeof ctx.createConicGradient !== 'function') return plasmaColorAtPhase(time * 0.10, alpha);
-  const phase = time * 0.09;
-  const g = ctx.createConicGradient(phase * TAU - 0.75, cx, cy);
-  const colors = [
-    [0.00, [247,250,255]], [0.18, [205,180,255]], [0.38, [177,64,255]],
-    [0.62, [92,82,255]], [0.82, [55,105,255]], [1.00, [247,250,255]],
-  ];
-  colors.forEach(([p, c]) => g.addColorStop(p, `rgba(${c[0]},${c[1]},${c[2]},${alpha})`));
-  return g;
-}
-
-drawLayeredRing = function drawLayeredRingTuned(path, cx, cy, radius, signal, time) {
-  const energy = Math.pow(clamp(signal.energy), 0.78);
-  const kick = clamp(signal.kick || 0);
-  const outerPath = tunedRingPath(cx, cy, radius, signal, 1.045);
-  const violetPath = tunedRingPath(cx, cy, radius, signal, 1.025);
-  const colorPath = tunedRingPath(cx, cy, radius, signal, 1.008);
-  const corePath = tunedRingPath(cx, cy, radius, signal, 0.994);
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-
-  ctx.strokeStyle = `rgba(55,86,255,${0.16 + energy * 0.12})`;
-  ctx.lineWidth = radius * (0.038 + kick * 0.006);
-  ctx.shadowBlur = radius * (0.100 + energy * 0.040);
-  ctx.shadowColor = 'rgba(62,82,255,0.82)';
-  ctx.stroke(outerPath);
-
-  ctx.strokeStyle = `rgba(177,64,255,${0.34 + energy * 0.26 + kick * 0.10})`;
-  ctx.lineWidth = radius * (0.032 + kick * 0.005);
-  ctx.shadowBlur = radius * (0.075 + energy * 0.030);
-  ctx.shadowColor = 'rgba(188,58,255,0.92)';
-  ctx.stroke(violetPath);
-
-  ctx.strokeStyle = makePlasmaGradient(cx, cy, time, 1);
-  ctx.lineWidth = radius * (0.028 + kick * 0.004);
-  ctx.shadowBlur = radius * (0.058 + energy * 0.028);
-  ctx.shadowColor = 'rgba(130,92,255,0.95)';
-  ctx.stroke(colorPath);
-
-  ctx.strokeStyle = `rgba(255,255,255,${0.92 + energy * 0.08})`;
-  ctx.lineWidth = radius * (0.014 + kick * 0.002);
-  ctx.shadowBlur = radius * (0.032 + kick * 0.018);
-  ctx.shadowColor = 'rgba(248,251,255,1)';
-  ctx.stroke(corePath);
-  ctx.restore();
+drawLayeredRing=function(path,cx,cy,radius,signal,time){
+  const e=Math.pow(clamp(signal.energy),.78),k=clamp(signal.kick||0); ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineJoin='round';ctx.lineCap='round';
+  const p1=tunedRingPath(cx,cy,radius,signal,1.055),p2=tunedRingPath(cx,cy,radius,signal,1.028),p3=tunedRingPath(cx,cy,radius,signal,1.006),p4=tunedRingPath(cx,cy,radius,signal,.992);
+  ctx.strokeStyle=`rgba(45,92,255,${.20+e*.14})`;ctx.lineWidth=radius*(.060+k*.009);ctx.shadowBlur=radius*(.15+e*.07);ctx.shadowColor='rgba(50,70,255,.95)';ctx.stroke(p1);
+  ctx.strokeStyle=`rgba(151,49,255,${.38+e*.28})`;ctx.lineWidth=radius*(.046+k*.008);ctx.shadowBlur=radius*(.12+e*.05);ctx.shadowColor='rgba(165,50,255,.98)';ctx.stroke(p2);
+  ctx.strokeStyle=makePlasmaGradient(cx,cy,time,1);ctx.lineWidth=radius*(.034+k*.006);ctx.shadowBlur=radius*(.085+e*.04);ctx.shadowColor='rgba(225,100,255,.98)';ctx.stroke(p3);
+  ctx.strokeStyle=`rgba(255,255,255,${.94+e*.06})`;ctx.lineWidth=radius*(.016+k*.003);ctx.shadowBlur=radius*(.04+k*.02);ctx.shadowColor='white';ctx.stroke(p4);ctx.restore();
 };
 
-drawFlameRay = function drawFlameRayTuned(cx, cy, radius, angle, length, width, phase, alpha, kickBoost = 0) {
-  const r0 = radius * 0.985;
-  const r1 = radius + length;
-  const x0 = cx + Math.cos(angle) * r0;
-  const y0 = cy + Math.sin(angle) * r0;
-  const x1 = cx + Math.cos(angle) * r1;
-  const y1 = cy + Math.sin(angle) * r1;
-  const nx = -Math.sin(angle);
-  const ny = Math.cos(angle);
-
-  // Much wider, not taller: thickness expands strongly while ray length stays controlled.
-  const bodyWidth = width * (2.65 + kickBoost * 0.55);
-  const baseHalf = bodyWidth * 0.82;
-  const midHalf = bodyWidth * 0.58;
-  const mx = x0 + (x1 - x0) * 0.46;
-  const my = y0 + (y1 - y0) * 0.46;
-
-  const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
-  gradient.addColorStop(0.00, plasmaColorAtPhase(phase + 0.02, Math.min(1, alpha + 0.34)));
-  gradient.addColorStop(0.22, plasmaColorAtPhase(phase, alpha));
-  gradient.addColorStop(0.62, plasmaColorAtPhase(phase, alpha * 0.42));
-  gradient.addColorStop(0.86, plasmaColorAtPhase(phase, alpha * 0.15));
-  gradient.addColorStop(1.00, plasmaColorAtPhase(phase, 0));
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.fillStyle = gradient;
-  ctx.shadowBlur = bodyWidth * (2.8 + kickBoost * 1.3);
-  ctx.shadowColor = plasmaColorAtPhase(phase, 0.72);
-  ctx.beginPath();
-  ctx.moveTo(x0 + nx * baseHalf, y0 + ny * baseHalf);
-  ctx.quadraticCurveTo(mx + nx * midHalf, my + ny * midHalf, x1, y1);
-  ctx.quadraticCurveTo(mx - nx * midHalf, my - ny * midHalf, x0 - nx * baseHalf, y0 - ny * baseHalf);
-  ctx.closePath();
-  ctx.fill();
-
-  const core = ctx.createLinearGradient(x0, y0, x1, y1);
-  core.addColorStop(0, 'rgba(255,255,255,0.82)');
-  core.addColorStop(0.35, plasmaColorAtPhase(phase + 0.015, Math.min(1, alpha + 0.15)));
-  core.addColorStop(1, plasmaColorAtPhase(phase, 0));
-  ctx.strokeStyle = core;
-  ctx.lineCap = 'round';
-  ctx.lineWidth = Math.max(1.5, bodyWidth * 0.20);
-  ctx.shadowBlur = bodyWidth * 1.05;
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-  ctx.restore();
+drawFlameRay=function(cx,cy,radius,angle,length,width,phase,alpha,kickBoost=0){
+  const r0=radius*.975,r1=radius+length,x0=cx+Math.cos(angle)*r0,y0=cy+Math.sin(angle)*r0,x1=cx+Math.cos(angle)*r1,y1=cy+Math.sin(angle)*r1,nx=-Math.sin(angle),ny=Math.cos(angle);
+  // Very broad side-to-side plasma band; height remains controlled.
+  const bw=width*(6.8+kickBoost*1.4),base=bw*.95,mid=bw*.78,mx=x0+(x1-x0)*.43,my=y0+(y1-y0)*.43;
+  const grad=ctx.createLinearGradient(x0,y0,x1,y1);grad.addColorStop(0,plasmaColorAtPhase(phase,Math.min(1,alpha+.38)));grad.addColorStop(.18,plasmaColorAtPhase(phase,alpha));grad.addColorStop(.48,plasmaColorAtPhase(phase,alpha*.50));grad.addColorStop(.78,plasmaColorAtPhase(phase,alpha*.18));grad.addColorStop(1,plasmaColorAtPhase(phase,0));
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.fillStyle=grad;ctx.shadowBlur=bw*(3.8+kickBoost*1.2);ctx.shadowColor=plasmaColorAtPhase(phase,.72);ctx.beginPath();ctx.moveTo(x0+nx*base,y0+ny*base);ctx.quadraticCurveTo(mx+nx*mid,my+ny*mid,x1,y1);ctx.quadraticCurveTo(mx-nx*mid,my-ny*mid,x0-nx*base,y0-ny*base);ctx.closePath();ctx.fill();
+  const core=ctx.createLinearGradient(x0,y0,x1,y1);core.addColorStop(0,'rgba(255,255,255,.88)');core.addColorStop(.32,plasmaColorAtPhase(phase,Math.min(1,alpha+.15)));core.addColorStop(1,plasmaColorAtPhase(phase,0));ctx.strokeStyle=core;ctx.lineCap='round';ctx.lineWidth=Math.max(2,bw*.22);ctx.shadowBlur=bw*1.5;ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();ctx.restore();
 };
 
-drawFlameField = function drawFlameFieldTuned(cx, cy, radius, signal, time) {
-  const energy = clamp(signal.energy);
-  const kick = clamp(signal.kick || 0);
-  const colorPhase = time * 0.09;
-  const count = 34;
-  for (let i = 0; i < count; i += 1) {
-    const angle = (i / count) * TAU + 0.018 * Math.sin(i * 2.7);
-    const seed = 0.5 + 0.5 * Math.sin(i * 12.9898 + 2.37);
-    const seed2 = 0.5 + 0.5 * Math.sin(i * 5.398 + 1.17);
-    const tallBias = 0.24 + seed * 1.22;
-    const localEnergy = energy * (0.40 + seed2 * 0.72) + kick * (0.28 + seed * 0.72);
-    const length = radius * (0.075 + tallBias * 0.20 + localEnergy * 0.15);
-    const width = radius * (0.021 + seed2 * 0.017);
-    const alpha = 0.24 + energy * 0.18 + seed * 0.16 + kick * 0.13;
-    drawFlameRay(cx, cy, radius, angle, length, width, colorPhase + i / count, alpha, kick);
-  }
+drawFlameField=function(cx,cy,radius,signal,time){
+  const e=clamp(signal.energy),k=clamp(signal.kick||0),phase=time*.045,count=18;
+  for(let i=0;i<count;i++){const angle=i/count*TAU+.025*Math.sin(i*2.7),s=.5+.5*Math.sin(i*12.9898+2.37),s2=.5+.5*Math.sin(i*5.398+1.17),local=e*(.40+s2*.72)+k*(.28+s*.72);const length=radius*(.07+s*.16+local*.11);const width=radius*(.038+s2*.030);const alpha=.25+e*.18+s*.16+k*.13;drawFlameRay(cx,cy,radius,angle,length,width,phase+i/count,alpha,k);}
 };
 
-drawAurora = function drawPlasmaContourTuned(width, height) {
-  const signal = fastBeatSignal();
-  const cx = width * 0.5;
-  const cy = height * 0.43;
-  const minSide = Math.min(width, height);
-  const baseRadius = minSide * (0.325 + signal.bass * 0.004 + (signal.kick || 0) * 0.006);
-  const path = buildContourPath(cx, cy, baseRadius, signal);
-
-  const haloRadius = baseRadius * (1.42 + signal.energy * 0.05);
-  const halo = ctx.createRadialGradient(cx, cy, baseRadius * 0.76, cx, cy, haloRadius);
-  halo.addColorStop(0, 'rgba(0,0,0,0)');
-  halo.addColorStop(0.54, `rgba(55,49,175,${0.045 + signal.energy * 0.045})`);
-  halo.addColorStop(0.80, `rgba(135,38,205,${0.040 + signal.energy * 0.045})`);
-  halo.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(cx, cy, haloRadius, 0, TAU);
-  ctx.fill();
-
-  drawFlameField(cx, cy, baseRadius, signal, contourClock);
-  drawLayeredRing(path, cx, cy, baseRadius, signal, contourClock);
-  drawTravellingPulse(cx, cy, baseRadius * 1.01, signal, contourClock);
-  drawHotSpots(cx, cy, baseRadius, signal, contourClock);
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = '#000000';
-  ctx.fill(path);
-  ctx.restore();
+drawAurora=function(width,height){
+  const signal=fastBeatSignal(),cx=width*.5,cy=height*.43,minSide=Math.min(width,height),r=minSide*(.325+signal.bass*.004+(signal.kick||0)*.006),path=buildContourPath(cx,cy,r,signal);
+  const hr=r*(1.58+signal.energy*.08),halo=ctx.createRadialGradient(cx,cy,r*.72,cx,cy,hr);halo.addColorStop(0,'rgba(0,0,0,0)');halo.addColorStop(.48,`rgba(55,60,255,${.05+signal.energy*.05})`);halo.addColorStop(.70,`rgba(132,38,255,${.08+signal.energy*.06})`);halo.addColorStop(.86,`rgba(225,55,255,${.035+signal.energy*.04})`);halo.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=halo;ctx.beginPath();ctx.arc(cx,cy,hr,0,TAU);ctx.fill();
+  drawFlameField(cx,cy,r,signal,contourClock);drawLayeredRing(path,cx,cy,r,signal,contourClock);
+  ctx.save();ctx.globalCompositeOperation='source-over';ctx.fillStyle='#000';ctx.fill(path);ctx.restore();
 };
