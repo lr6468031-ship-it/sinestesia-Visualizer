@@ -1,4 +1,4 @@
-// Plasma Ultra: layered neon plasma contour with fast kick response.
+// Plasma Ultra: stable layered plasma ring with tapered flame rays and travelling pulse.
 let fastReactiveEnergy = 0;
 let smoothBass = 0;
 let smoothMid = 0;
@@ -49,7 +49,7 @@ function fastBeatSignal() {
     smoothBass *= 0.60;
     smoothMid *= 0.62;
     smoothTreble *= 0.62;
-    kickPunch *= 0.48;
+    kickPunch *= 0.45;
     return { bass: smoothBass, mid: smoothMid, treble: smoothTreble, energy: fastReactiveEnergy, kick: kickPunch };
   }
 
@@ -59,64 +59,41 @@ function fastBeatSignal() {
   const trebleNow = averageRange(2800, 12500);
   const rms = rmsLevel();
 
-  smoothBass = followValue(smoothBass, bassNow, 0.92, 0.20);
+  smoothBass = followValue(smoothBass, bassNow, 0.93, 0.20);
   smoothMid = followValue(smoothMid, midNow, 0.82, 0.18);
   smoothTreble = followValue(smoothTreble, trebleNow, 0.84, 0.20);
 
   const kickRise = Math.max(0, kickNow - previousKickInput);
-  const kickTransient = kickRise * 5.2;
-  const kickWeight = Math.max(0, kickNow - 0.34) * 1.9;
+  const kickTransient = kickRise * 6.2;
+  const kickWeight = Math.max(0, kickNow - 0.30) * 2.0;
   const kickTarget = clamp(kickTransient + kickWeight);
-  kickPunch = followValue(kickPunch, kickTarget, 0.99, 0.13);
+  kickPunch = followValue(kickPunch, kickTarget, 0.995, 0.11);
   previousKickInput = kickNow;
 
   const target = clamp(
-    rms * 1.85 +
-    smoothBass * 0.96 +
-    smoothMid * 0.24 +
-    smoothTreble * 0.14 +
-    kickPunch * 0.24
+    rms * 1.75 + smoothBass * 0.92 + smoothMid * 0.22 + smoothTreble * 0.13 + kickPunch * 0.30
   );
-  fastReactiveEnergy = followValue(fastReactiveEnergy, target, 0.93, 0.18);
+  fastReactiveEnergy = followValue(fastReactiveEnergy, target, 0.94, 0.18);
 
   return { bass: smoothBass, mid: smoothMid, treble: smoothTreble, energy: fastReactiveEnergy, kick: kickPunch };
 }
 
-function periodicPulse(angle, center, width) {
-  const d = Math.atan2(Math.sin(angle - center), Math.cos(angle - center));
-  return Math.exp(-(d * d) / Math.max(0.0001, width * width));
+function fixedContourRadius(angle, baseRadius, signal) {
+  // Keep the silhouette firm: no time-based worm motion.
+  const fixedShape =
+    Math.sin(angle * 3.0 + 0.45) * 0.012 +
+    Math.sin(angle * 5.0 - 0.85) * 0.007 +
+    Math.sin(angle * 9.0 + 1.4) * 0.003;
+  const bassBulge = Math.max(0, Math.sin(angle)) * (signal.bass * 0.015 + (signal.kick || 0) * 0.020);
+  return baseRadius * (1 + fixedShape + bassBulge);
 }
 
-function bandAtAngle(angle, bass, mid, treble) {
-  const bassWeight = periodicPulse(angle, Math.PI * 0.50, 1.00);
-  const trebleWeight = periodicPulse(angle, Math.PI * 1.50, 0.90);
-  const midWeight = Math.min(1, periodicPulse(angle, 0, 0.92) + periodicPulse(angle, Math.PI, 0.92));
-  return bass * bassWeight + mid * midWeight * 0.78 + treble * trebleWeight * 0.82;
-}
-
-function contourRadius(angle, baseRadius, signal, time) {
-  const local = bandAtAngle(angle, signal.bass, signal.mid, signal.treble);
-  const bassWeight = periodicPulse(angle, Math.PI * 0.50, 1.05);
-  const slow =
-    Math.sin(angle * 3.0 + time * 0.82) * 0.032 +
-    Math.sin(angle * 5.0 - time * 0.50 + 0.8) * 0.020;
-  const detail =
-    Math.sin(angle * 9.0 + time * 1.10) * 0.009 +
-    Math.sin(angle * 13.0 - time * 0.70) * 0.005;
-  const music =
-    local * 0.080 +
-    signal.energy * 0.014 +
-    (signal.kick || 0) * bassWeight * 0.205 +
-    (signal.kick || 0) * 0.035;
-  return baseRadius * (1 + slow + detail + music);
-}
-
-function buildContourPath(cx, cy, baseRadius, signal, time) {
-  const count = 104;
+function buildContourPath(cx, cy, baseRadius, signal) {
+  const count = 128;
   const points = new Array(count);
   for (let i = 0; i < count; i += 1) {
     const angle = (i / count) * TAU;
-    const r = contourRadius(angle, baseRadius, signal, time);
+    const r = fixedContourRadius(angle, baseRadius, signal);
     points[i] = { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
   }
   const path = new Path2D();
@@ -132,85 +109,173 @@ function buildContourPath(cx, cy, baseRadius, signal, time) {
   return path;
 }
 
+function colorAtPhase(phase, alpha = 1) {
+  const hue = ((phase % 1) + 1) % 1;
+  const stops = [
+    [0.00, [240, 247, 255]],
+    [0.14, [132, 72, 255]],
+    [0.30, [67, 126, 255]],
+    [0.46, [48, 246, 177]],
+    [0.62, [255, 226, 61]],
+    [0.78, [255, 78, 184]],
+    [0.92, [116, 51, 255]],
+    [1.00, [240, 247, 255]],
+  ];
+  let a = stops[0], b = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i += 1) {
+    if (hue >= stops[i][0] && hue <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
+  }
+  const span = Math.max(0.0001, b[0] - a[0]);
+  const t = (hue - a[0]) / span;
+  const rgb = a[1].map((v, i) => Math.round(v + (b[1][i] - v) * t));
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+}
+
 function makeContourGradient(cx, cy, time, alpha = 1) {
-  if (typeof ctx.createConicGradient !== 'function') return `rgba(170,70,255,${alpha})`;
-  const speed = getColorSpeed();
-  const g = ctx.createConicGradient(time * 0.17 * speed - 0.75, cx, cy);
-  g.addColorStop(0.00, `rgba(250,250,255,${alpha})`);
-  g.addColorStop(0.12, `rgba(141,74,255,${alpha})`);
-  g.addColorStop(0.28, `rgba(67,126,255,${alpha})`);
-  g.addColorStop(0.44, `rgba(44,255,176,${alpha})`);
-  g.addColorStop(0.60, `rgba(255,227,67,${alpha})`);
-  g.addColorStop(0.75, `rgba(255,83,186,${alpha})`);
-  g.addColorStop(0.90, `rgba(116,55,255,${alpha})`);
-  g.addColorStop(1.00, `rgba(250,250,255,${alpha})`);
+  if (typeof ctx.createConicGradient !== 'function') return colorAtPhase(time * 0.18 * getColorSpeed(), alpha);
+  const phase = time * 0.23 * getColorSpeed();
+  const g = ctx.createConicGradient(phase * TAU - 0.75, cx, cy);
+  const colors = [
+    [0.00, [246,249,255]], [0.12, [140,73,255]], [0.28, [67,126,255]],
+    [0.44, [47,245,176]], [0.60, [255,227,66]], [0.76, [255,79,188]],
+    [0.90, [119,54,255]], [1.00, [246,249,255]],
+  ];
+  colors.forEach(([p, c]) => g.addColorStop(p, `rgba(${c[0]},${c[1]},${c[2]},${alpha})`));
   return g;
 }
 
-function drawContourGlow(path, cx, cy, radius, signal, time) {
-  const energy = Math.pow(clamp(signal.energy), 0.76);
+function drawLayeredRing(path, cx, cy, radius, signal, time) {
+  const energy = Math.pow(clamp(signal.energy), 0.78);
   const kick = clamp(signal.kick || 0);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  // Layer 1: broad blue-violet atmosphere.
-  ctx.strokeStyle = `rgba(72,106,255,${0.10 + energy * 0.10 + kick * 0.08})`;
-  ctx.lineWidth = radius * (0.145 + energy * 0.035 + kick * 0.035);
-  ctx.shadowBlur = radius * (0.15 + energy * 0.07 + kick * 0.06);
-  ctx.shadowColor = 'rgba(70,90,255,0.55)';
+  // Four clearly separated light layers.
+  ctx.strokeStyle = `rgba(45,78,255,${0.10 + energy * 0.10})`;
+  ctx.lineWidth = radius * (0.155 + kick * 0.020);
+  ctx.shadowBlur = radius * (0.17 + energy * 0.06);
+  ctx.shadowColor = 'rgba(60,76,255,0.58)';
   ctx.stroke(path);
 
-  // Layer 2: concentrated purple plasma shell.
-  ctx.strokeStyle = `rgba(173,54,255,${0.28 + energy * 0.24 + kick * 0.15})`;
-  ctx.lineWidth = radius * (0.078 + energy * 0.018 + kick * 0.020);
-  ctx.shadowBlur = radius * (0.080 + energy * 0.035 + kick * 0.040);
-  ctx.shadowColor = 'rgba(180,46,255,0.78)';
+  ctx.strokeStyle = `rgba(166,54,255,${0.28 + energy * 0.22 + kick * 0.12})`;
+  ctx.lineWidth = radius * (0.092 + kick * 0.014);
+  ctx.shadowBlur = radius * (0.095 + energy * 0.035);
+  ctx.shadowColor = 'rgba(180,46,255,0.82)';
   ctx.stroke(path);
 
-  // Layer 3: animated chromatic plasma body.
-  ctx.strokeStyle = makeContourGradient(cx, cy, time, 0.96);
-  ctx.lineWidth = radius * (0.042 + energy * 0.012 + kick * 0.014);
-  ctx.shadowBlur = radius * (0.050 + energy * 0.030 + kick * 0.035);
-  ctx.shadowColor = 'rgba(134,72,255,0.82)';
+  ctx.strokeStyle = makeContourGradient(cx, cy, time, 0.98);
+  ctx.lineWidth = radius * (0.050 + kick * 0.010);
+  ctx.shadowBlur = radius * (0.060 + energy * 0.030);
+  ctx.shadowColor = 'rgba(122,86,255,0.88)';
   ctx.stroke(path);
 
-  // Layer 4: hot white central core.
-  ctx.strokeStyle = `rgba(255,255,255,${0.82 + energy * 0.14})`;
-  ctx.lineWidth = radius * (0.010 + energy * 0.004 + kick * 0.003);
-  ctx.shadowBlur = radius * (0.026 + energy * 0.024 + kick * 0.028);
-  ctx.shadowColor = 'rgba(236,244,255,1)';
+  ctx.strokeStyle = `rgba(255,255,255,${0.88 + energy * 0.10})`;
+  ctx.lineWidth = radius * (0.011 + kick * 0.0025);
+  ctx.shadowBlur = radius * (0.030 + kick * 0.022);
+  ctx.shadowColor = 'rgba(245,249,255,1)';
   ctx.stroke(path);
   ctx.restore();
 }
 
-function drawHotSpots(cx, cy, radius, signal, time) {
-  const spots = [
-    { angle: Math.PI * 1.45, color: [245, 248, 255], band: signal.treble },
-    { angle: Math.PI * 0.88, color: [255, 224, 66], band: signal.mid },
-    { angle: Math.PI * 0.05, color: [61, 229, 170], band: signal.mid },
-    { angle: Math.PI * 0.43, color: [168, 65, 255], band: signal.bass + (signal.kick || 0) },
-  ];
+function drawFlameRay(cx, cy, radius, angle, length, width, phase, alpha, kickBoost = 0) {
+  const r0 = radius * 0.99;
+  const r1 = radius + length;
+  const x0 = cx + Math.cos(angle) * r0;
+  const y0 = cy + Math.sin(angle) * r0;
+  const x1 = cx + Math.cos(angle) * r1;
+  const y1 = cy + Math.sin(angle) * r1;
+  const g = ctx.createLinearGradient(x0, y0, x1, y1);
+  const baseColor = colorAtPhase(phase, alpha);
+  const hotColor = colorAtPhase(phase + 0.025, Math.min(1, alpha + 0.28));
+  g.addColorStop(0.00, hotColor);
+  g.addColorStop(0.18, baseColor);
+  g.addColorStop(0.62, colorAtPhase(phase, alpha * 0.34));
+  g.addColorStop(1.00, colorAtPhase(phase, 0));
+
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < spots.length; i += 1) {
-    const s = spots[i];
-    const a = s.angle + Math.sin(time * 0.28 + i * 1.7) * 0.11;
-    const r = contourRadius(a, radius, signal, time);
+  ctx.strokeStyle = g;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = width * (1 + kickBoost * 0.55);
+  ctx.shadowBlur = width * (1.8 + kickBoost * 1.4);
+  ctx.shadowColor = colorAtPhase(phase, 0.78);
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFlameField(cx, cy, radius, signal, time) {
+  const energy = clamp(signal.energy);
+  const kick = clamp(signal.kick || 0);
+  const colorPhase = time * 0.23 * getColorSpeed();
+  const count = 38;
+  ctx.save();
+  for (let i = 0; i < count; i += 1) {
+    const angle = (i / count) * TAU + 0.021 * Math.sin(i * 2.7);
+    const seed = 0.5 + 0.5 * Math.sin(i * 12.9898 + 2.37);
+    const seed2 = 0.5 + 0.5 * Math.sin(i * 5.398 + 1.17);
+    // Rays stay in place; only brightness/length breathes with music, not position.
+    const tallBias = 0.38 + seed * 0.95;
+    const localEnergy = energy * (0.45 + seed2 * 0.65) + kick * (0.30 + seed * 0.60);
+    const length = radius * (0.05 + tallBias * 0.18 + localEnergy * 0.13);
+    const width = radius * (0.008 + seed2 * 0.010);
+    const alpha = 0.15 + energy * 0.14 + seed * 0.14 + kick * 0.12;
+    drawFlameRay(cx, cy, radius, angle, length, width, colorPhase + i / count, alpha, kick);
+  }
+  ctx.restore();
+}
+
+function drawTravellingPulse(cx, cy, radius, signal, time) {
+  const speed = 0.55;
+  const angle = (time * speed) % TAU;
+  const pulseStrength = 0.28 + clamp(signal.energy) * 0.42 + clamp(signal.kick || 0) * 0.55;
+
+  // Bright pulse on second layer.
+  const arcRadius = radius * 1.015;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  const phase = time * 0.23 * getColorSpeed() + angle / TAU;
+  ctx.strokeStyle = colorAtPhase(phase, 0.72 + pulseStrength * 0.25);
+  ctx.lineWidth = radius * (0.040 + pulseStrength * 0.018);
+  ctx.shadowBlur = radius * (0.070 + pulseStrength * 0.045);
+  ctx.shadowColor = colorAtPhase(phase, 0.95);
+  ctx.beginPath();
+  ctx.arc(cx, cy, arcRadius, angle - 0.12, angle + 0.12);
+  ctx.stroke();
+  ctx.restore();
+
+  // Matching flame: intense at the ring, fading outward.
+  const flameLength = radius * (0.16 + pulseStrength * 0.18);
+  const flameWidth = radius * (0.022 + pulseStrength * 0.012);
+  drawFlameRay(cx, cy, radius * 1.01, angle, flameLength, flameWidth, phase, 0.62 + pulseStrength * 0.22, pulseStrength);
+}
+
+function drawHotSpots(cx, cy, radius, signal, time) {
+  const phase = time * 0.23 * getColorSpeed();
+  const spots = [0.10, 0.31, 0.56, 0.78];
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  spots.forEach((p, i) => {
+    const a = p * TAU;
+    const r = fixedContourRadius(a, radius, signal);
     const x = cx + Math.cos(a) * r;
     const y = cy + Math.sin(a) * r;
-    const strength = 0.24 + clamp(s.band) * 0.95 + signal.energy * 0.20;
-    const size = radius * (0.075 + strength * 0.065);
+    const strength = 0.20 + signal.energy * 0.30 + (i === 2 ? (signal.kick || 0) * 0.42 : 0);
+    const size = radius * (0.055 + strength * 0.055);
     const g = ctx.createRadialGradient(x, y, 0, x, y, size);
-    g.addColorStop(0, `rgba(${s.color[0]},${s.color[1]},${s.color[2]},${0.38 + strength * 0.22})`);
-    g.addColorStop(0.38, `rgba(${s.color[0]},${s.color[1]},${s.color[2]},${0.17 + strength * 0.16})`);
-    g.addColorStop(1, `rgba(${s.color[0]},${s.color[1]},${s.color[2]},0)`);
+    g.addColorStop(0, colorAtPhase(phase + p, 0.46 + strength * 0.26));
+    g.addColorStop(0.42, colorAtPhase(phase + p, 0.18 + strength * 0.12));
+    g.addColorStop(1, colorAtPhase(phase + p, 0));
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(x, y, size, 0, TAU);
     ctx.fill();
-  }
+  });
   ctx.restore();
 }
 
@@ -224,23 +289,26 @@ drawAurora = function drawPlasmaContour(width, height) {
   const cx = width * 0.5;
   const cy = height * 0.43;
   const minSide = Math.min(width, height);
-  const baseRadius = minSide * (0.282 + signal.bass * 0.006 + (signal.kick || 0) * 0.012);
-  const path = buildContourPath(cx, cy, baseRadius, signal, contourClock);
+  const baseRadius = minSide * (0.282 + signal.bass * 0.004 + (signal.kick || 0) * 0.006);
+  const path = buildContourPath(cx, cy, baseRadius, signal);
 
-  const haloRadius = baseRadius * (1.45 + signal.energy * 0.08 + (signal.kick || 0) * 0.10);
-  const halo = ctx.createRadialGradient(cx, cy, baseRadius * 0.70, cx, cy, haloRadius);
+  const haloRadius = baseRadius * (1.46 + signal.energy * 0.06);
+  const halo = ctx.createRadialGradient(cx, cy, baseRadius * 0.75, cx, cy, haloRadius);
   halo.addColorStop(0, 'rgba(0,0,0,0)');
-  halo.addColorStop(0.55, `rgba(58,42,170,${0.045 + signal.energy * 0.045})`);
-  halo.addColorStop(0.78, `rgba(128,34,196,${0.040 + signal.energy * 0.045 + (signal.kick || 0) * 0.035})`);
+  halo.addColorStop(0.56, `rgba(54,48,170,${0.035 + signal.energy * 0.040})`);
+  halo.addColorStop(0.80, `rgba(128,34,196,${0.035 + signal.energy * 0.042})`);
   halo.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = halo;
   ctx.beginPath();
   ctx.arc(cx, cy, haloRadius, 0, TAU);
   ctx.fill();
 
-  drawContourGlow(path, cx, cy, baseRadius, signal, contourClock);
+  drawFlameField(cx, cy, baseRadius, signal, contourClock);
+  drawLayeredRing(path, cx, cy, baseRadius, signal, contourClock);
+  drawTravellingPulse(cx, cy, baseRadius, signal, contourClock);
   drawHotSpots(cx, cy, baseRadius, signal, contourClock);
 
+  // Keep the center deep black.
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#000000';
@@ -278,10 +346,12 @@ function contourFrame(now) {
   contourClock += delta / 1000;
   contourLast = now;
   if (!contourSize) contourSize = measureContour();
+
   if (analyser && !audio.paused) {
     analyser.getByteFrequencyData(frequencyData);
     analyser.getByteTimeDomainData(timeData);
   }
+
   drawBackground(contourSize.width, contourSize.height);
   drawAurora(contourSize.width, contourSize.height);
 
@@ -290,10 +360,11 @@ function contourFrame(now) {
     bassValue.textContent = Math.round(smoothBass * 100);
     midValue.textContent = Math.round(smoothMid * 100);
     trebleValue.textContent = Math.round(smoothTreble * 100);
-    if (instrumentValue) instrumentValue.textContent = 'Plasma Ultra · ' + (audio.paused ? 'En pausa' : 'Reactivo');
+    if (instrumentValue) instrumentValue.textContent = 'Plasma Ultra · Firme · Reactivo';
     const notice = document.getElementById('visualNotice');
-    if (notice) notice.textContent = 'Plasma Ultra · 4 capas · Kick Boost';
+    if (notice) notice.textContent = 'Plasma Ultra · 4 capas · Flamas · Pulso';
   }
+
   animationFrame = requestAnimationFrame(contourFrame);
 }
 
