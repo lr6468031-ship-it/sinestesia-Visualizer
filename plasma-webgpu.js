@@ -98,33 +98,33 @@ fn rot(a: f32) -> mat2x2<f32> {
 
 fn plasmaMap(pin: vec3<f32>) -> f32 {
   var p = pin;
-  let xz = rot(u.time * 0.085) * vec2<f32>(p.x, p.z);
+  let xz = rot(u.time * 0.075) * vec2<f32>(p.x, p.z);
   p.x = xz.x;
   p.z = xz.y;
-  let yz = rot(-0.19 + sin(u.time * 0.07) * 0.16) * vec2<f32>(p.y, p.z);
+  let yz = rot(-0.17 + sin(u.time * 0.055) * 0.14) * vec2<f32>(p.y, p.z);
   p.y = yz.x;
   p.z = yz.y;
 
-  let coarse = fbm(p * 2.05 + vec3<f32>(u.time * 0.11, -u.time * 0.08, u.time * 0.06));
-  let warp = fbm(p * 3.55 + vec3<f32>(coarse * 1.8, -coarse * 1.2, u.time * 0.09));
-  let detail = fbm(p * 6.0 + vec3<f32>(-u.time * 0.07, u.time * 0.05, coarse * 2.1));
+  let coarse = fbm(p * 1.92 + vec3<f32>(u.time * 0.085, -u.time * 0.060, u.time * 0.045));
+  let warp = fbm(p * 3.18 + vec3<f32>(coarse * 2.05, -coarse * 1.45, u.time * 0.070));
+  let detail = fbm(p * 5.65 + vec3<f32>(-u.time * 0.055, u.time * 0.040, coarse * 2.35));
 
   let len = max(length(p), 0.0001);
   let dir = p / len;
-  let low = pow(max(-dir.y, 0.0), 2.1);
+  let low = pow(max(-dir.y, 0.0), 2.0);
   let high = pow(max(dir.y, 0.0), 2.2);
   let sides = pow(abs(dir.x), 2.0);
-  let audioBulge = u.bass * low * 0.145 + u.mid * sides * 0.095 + u.treble * high * 0.105;
+  let audioBulge = u.bass * low * 0.155 + u.mid * sides * 0.092 + u.treble * high * 0.095;
 
-  let fold = sin(p.x * 4.2 + p.y * 2.7 - u.time * 0.36 + coarse * 5.0) * 0.035;
-  let fold2 = sin(p.z * 5.4 - p.y * 3.1 + u.time * 0.27 + warp * 4.0) * 0.026;
-  let breathing = sin(u.time * 0.78) * 0.013 + u.energy * 0.035;
-  let radius = 0.72 + (coarse - 0.5) * 0.20 + (warp - 0.5) * 0.105 + (detail - 0.5) * 0.035 + fold + fold2 + audioBulge + breathing;
+  let fold = sin(p.x * 3.9 + p.y * 2.4 - u.time * 0.29 + coarse * 5.7) * 0.042;
+  let fold2 = sin(p.z * 4.9 - p.y * 2.8 + u.time * 0.22 + warp * 4.7) * 0.030;
+  let breathing = sin(u.time * 0.66) * 0.012 + u.energy * 0.030;
+  let radius = 0.715 + (coarse - 0.5) * 0.215 + (warp - 0.5) * 0.112 + (detail - 0.5) * 0.028 + fold + fold2 + audioBulge + breathing;
   return len - radius;
 }
 
 fn normalAt(p: vec3<f32>) -> vec3<f32> {
-  let e = 0.0045;
+  let e = 0.0048;
   let dx = plasmaMap(p + vec3<f32>(e, 0.0, 0.0)) - plasmaMap(p - vec3<f32>(e, 0.0, 0.0));
   let dy = plasmaMap(p + vec3<f32>(0.0, e, 0.0)) - plasmaMap(p - vec3<f32>(0.0, e, 0.0));
   let dz = plasmaMap(p + vec3<f32>(0.0, 0.0, e)) - plasmaMap(p - vec3<f32>(0.0, 0.0, e));
@@ -133,11 +133,32 @@ fn normalAt(p: vec3<f32>) -> vec3<f32> {
 
 fn palette(t0: f32) -> vec3<f32> {
   let t = fract(t0);
-  let a = vec3<f32>(0.56, 0.47, 0.62);
-  let b = vec3<f32>(0.52, 0.50, 0.44);
-  let c = vec3<f32>(1.0, 1.0, 1.0);
-  let d = vec3<f32>(0.58, 0.13, 0.82);
-  return clamp(a + b * cos(6.2831853 * (c * t + d)), vec3<f32>(0.0), vec3<f32>(1.35));
+  let deepBlue = vec3<f32>(0.008, 0.025, 0.19);
+  let blue = vec3<f32>(0.018, 0.24, 1.08);
+  let cyan = vec3<f32>(0.00, 0.92, 1.30);
+  let violet = vec3<f32>(0.42, 0.055, 1.02);
+  let magenta = vec3<f32>(1.05, 0.025, 0.50);
+
+  if (t < 0.22) {
+    return mix(deepBlue, blue, t / 0.22);
+  }
+  if (t < 0.47) {
+    return mix(blue, cyan, (t - 0.22) / 0.25);
+  }
+  if (t < 0.68) {
+    return mix(cyan, violet, (t - 0.47) / 0.21);
+  }
+  if (t < 0.84) {
+    return mix(violet, magenta, (t - 0.68) / 0.16);
+  }
+  return mix(magenta, deepBlue, (t - 0.84) / 0.16);
+}
+
+fn filamentField(p: vec3<f32>, phase: f32) -> f32 {
+  let a = fbm(p * 5.2 + vec3<f32>(u.time * 0.12, -u.time * 0.08, phase * 2.1));
+  let b = fbm(p * 9.4 + vec3<f32>(-u.time * 0.07, a * 2.7, u.time * 0.09));
+  let wave = sin(a * 20.0 - b * 11.0 + p.y * 7.0 + p.z * 4.0 - u.time * 1.05 + phase);
+  return pow(max(0.0, 1.0 - abs(wave)), 10.0);
 }
 
 @vertex
@@ -170,7 +191,7 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let d = plasmaMap(p);
     let ad = abs(d);
     minAbs = min(minAbs, ad);
-    haze = haze + exp(-ad * 26.0) * 0.0075;
+    haze = haze + exp(-ad * 23.0) * 0.0082;
     if (ad < 0.0038) {
       hit = true;
       break;
@@ -182,9 +203,9 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
   }
 
   var color = vec3<f32>(0.0, 0.0, 0.0);
-  let radialHalo = exp(-max(0.0, length(uv) - 0.53) * 7.5) * (0.035 + u.energy * 0.11);
-  color = color + vec3<f32>(0.16, 0.05, 0.48) * radialHalo;
-  color = color + palette(u.time * 0.012 + 0.72) * haze * (0.45 + u.energy * 0.85);
+  let radialHalo = exp(-max(0.0, length(uv) - 0.51) * 7.0) * (0.030 + u.energy * 0.12);
+  color = color + vec3<f32>(0.02, 0.10, 0.46) * radialHalo;
+  color = color + palette(u.time * 0.010 + 0.12) * haze * (0.34 + u.energy * 0.68);
 
   if (hit) {
     let n = normalAt(p);
@@ -193,39 +214,58 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     let lightB = normalize(vec3<f32>(0.72, -0.18, 0.54));
     let diffuseA = max(dot(n, lightA), 0.0);
     let diffuseB = max(dot(n, lightB), 0.0);
-    let fresnel = pow(1.0 - max(dot(n, viewDir), 0.0), 2.25);
+    let fresnel = pow(1.0 - max(dot(n, viewDir), 0.0), 2.0);
 
-    let flow1 = fbm(p * 3.7 + vec3<f32>(u.time * 0.13, -u.time * 0.09, u.time * 0.06));
-    let flow2 = fbm(p * 7.1 + vec3<f32>(-u.time * 0.08, flow1 * 2.4, u.time * 0.11));
-    let flow3 = fbm(p * 11.0 + vec3<f32>(flow2 * 2.0, u.time * 0.05, -u.time * 0.07));
-    let ribbons = 0.5 + 0.5 * sin(flow1 * 15.0 + flow2 * 8.0 + p.y * 5.0 - u.time * 0.72);
-    let veins = pow(0.5 + 0.5 * sin(flow2 * 28.0 - flow3 * 13.0 + p.x * 7.0 + u.time * 0.46), 8.0);
+    let flow1 = fbm(p * 3.45 + vec3<f32>(u.time * 0.095, -u.time * 0.064, u.time * 0.044));
+    let flow2 = fbm(p * 6.65 + vec3<f32>(-u.time * 0.060, flow1 * 2.65, u.time * 0.080));
+    let flow3 = fbm(p * 10.2 + vec3<f32>(flow2 * 2.15, u.time * 0.040, -u.time * 0.055));
+    let ribbons = 0.5 + 0.5 * sin(flow1 * 13.0 + flow2 * 7.2 + p.y * 4.3 - u.time * 0.54);
+    let veins = pow(max(0.0, 1.0 - abs(sin(flow2 * 23.0 - flow3 * 12.0 + p.x * 6.4 + u.time * 0.39))), 9.0);
 
-    let phase = flow1 * 0.47 + flow2 * 0.22 + p.y * 0.08 + u.time * 0.016;
-    var base = mix(palette(phase), palette(phase + 0.23), ribbons);
-    let light = 0.20 + diffuseA * 0.78 + diffuseB * 0.26;
-    base = base * light * (0.88 + u.energy * 0.30);
+    let phase = flow1 * 0.34 + flow2 * 0.16 + p.y * 0.055 + u.time * 0.010;
+    var surfaceColor = mix(palette(phase), palette(phase + 0.14), ribbons * 0.72);
+    let light = 0.10 + diffuseA * 0.43 + diffuseB * 0.13;
+    surfaceColor = surfaceColor * light * (0.70 + u.energy * 0.20);
 
-    base = base + palette(phase + 0.37) * veins * (0.20 + u.treble * 0.72);
-    base = base + vec3<f32>(0.22, 0.48, 1.0) * fresnel * (0.60 + u.mid * 0.58);
+    // Internal samples make the body read as translucent plasma instead of painted marble.
+    var internal = vec3<f32>(0.0);
+    var transmittance = 1.0;
+    for (var layer: i32 = 0; layer < 6; layer = layer + 1) {
+      let depth = 0.035 + f32(layer) * 0.060;
+      let vp = p + rd * depth;
+      let volumeA = fbm(vp * 4.6 + vec3<f32>(u.time * 0.075, -u.time * 0.052, f32(layer) * 0.61));
+      let volumeB = fbm(vp * 8.1 + vec3<f32>(-u.time * 0.050, volumeA * 2.8, u.time * 0.064));
+      let filament = filamentField(vp, f32(layer) * 0.73);
+      let depthPhase = phase + volumeA * 0.26 + volumeB * 0.13 + depth * 0.42;
+      var layerColor = palette(depthPhase) * (0.038 + volumeA * 0.055);
+      layerColor = layerColor + vec3<f32>(0.18, 0.88, 1.34) * filament * (0.18 + u.treble * 0.40 + u.energy * 0.16);
+      internal = internal + layerColor * transmittance;
+      transmittance = transmittance * 0.76;
+    }
+
+    let edgeElectric = vec3<f32>(0.03, 0.72, 1.35) * fresnel * (0.52 + u.mid * 0.52);
+    let veinColor = mix(vec3<f32>(0.16, 0.88, 1.25), vec3<f32>(0.84, 0.12, 1.08), clamp(flow2, 0.0, 1.0));
+    let electricVeins = veinColor * veins * (0.18 + u.treble * 0.66);
 
     let h = normalize(lightA + viewDir);
-    let spec = pow(max(dot(n, h), 0.0), 48.0);
-    base = base + vec3<f32>(1.0, 0.94, 0.88) * spec * (0.52 + u.energy * 0.76);
+    let spec = pow(max(dot(n, h), 0.0), 62.0);
+    let sharpSpark = vec3<f32>(0.72, 0.96, 1.25) * spec * (0.14 + u.energy * 0.26);
 
-    let innerPulse = 0.5 + 0.5 * sin(u.time * 1.25 + flow1 * 6.0);
-    base = base + palette(phase + 0.58) * innerPulse * u.bass * 0.16;
-    color = color + base;
+    let innerPulse = 0.5 + 0.5 * sin(u.time * 1.12 + flow1 * 5.3);
+    let pulseGlow = palette(phase + 0.31) * innerPulse * u.bass * 0.10;
+
+    color = color + surfaceColor * 0.60 + internal * 1.02 + electricVeins + edgeElectric + sharpSpark + pulseGlow;
   } else {
-    let edgeAura = exp(-minAbs * 13.0) * (0.10 + u.energy * 0.38);
-    color = color + palette(u.time * 0.014 + uv.y * 0.10) * edgeAura;
+    let edgeAura = exp(-minAbs * 12.0) * (0.085 + u.energy * 0.34);
+    let auraColor = mix(vec3<f32>(0.01, 0.23, 0.95), vec3<f32>(0.00, 0.91, 1.20), clamp(uv.y + 0.45, 0.0, 1.0));
+    color = color + auraColor * edgeAura;
   }
 
   color = color * u.intensity;
-  color = vec3<f32>(1.0) - exp(-color * 1.24);
-  color = pow(color, vec3<f32>(0.88));
+  color = vec3<f32>(1.0) - exp(-color * 1.12);
+  color = pow(color, vec3<f32>(0.90));
   let vignette = smoothstep(1.45, 0.35, length(uv * vec2<f32>(0.78, 0.70)));
-  color = color * (0.76 + vignette * 0.24);
+  color = color * (0.74 + vignette * 0.26);
   return vec4<f32>(color, 1.0);
 }
 `;
@@ -326,10 +366,10 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
       slowFrames = 0;
     }
 
-    const maxPixels = 520000;
+    const maxPixels = 500000;
     const dpr = Math.min(
       window.devicePixelRatio || 1,
-      1.45,
+      1.40,
       Math.sqrt(maxPixels / Math.max(1, width * height)),
     ) * quality;
     const w = Math.max(1, Math.round(width * dpr));
@@ -348,7 +388,7 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
       signal.mid,
       signal.treble,
       signal.energy,
-      1.20 + signal.energy * 0.22,
+      1.16 + signal.energy * 0.20,
     ]);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
 
