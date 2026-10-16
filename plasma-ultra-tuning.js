@@ -15,18 +15,24 @@ drawLayeredRing=function(path,cx,cy,radius,signal,time){const e=Math.pow(clamp(s
 // A ray is a rounded thick capsule/column, never a triangle or pointed flame.
 drawFlameRay=function(cx,cy,radius,angle,length,width,phase,alpha,kickBoost=0){
  const r0=radius*.985;
- // Keep it SHORT. Audio mainly changes thickness, not height.
  const shortLength=Math.min(length,radius*(.12+kickBoost*.035));
  const r1=r0+shortLength;
  const x0=cx+Math.cos(angle)*r0,y0=cy+Math.sin(angle)*r0,x1=cx+Math.cos(angle)*r1,y1=cy+Math.sin(angle)*r1;
- // Extreme lateral thickness.
  const thickness=width*(9.5+kickBoost*2.2);
  const grad=ctx.createLinearGradient(x0,y0,x1,y1);grad.addColorStop(0,plasmaColorAtPhase(phase,Math.min(1,alpha+.35)));grad.addColorStop(.42,plasmaColorAtPhase(phase,alpha*.72));grad.addColorStop(.78,plasmaColorAtPhase(phase,alpha*.26));grad.addColorStop(1,plasmaColorAtPhase(phase,0));
  ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle=grad;ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=thickness;ctx.shadowBlur=thickness*2.7;ctx.shadowColor=plasmaColorAtPhase(phase,.72);ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
- // soft wide aura around each band
  ctx.globalAlpha=.32;ctx.lineWidth=thickness*1.65;ctx.shadowBlur=thickness*3.8;ctx.strokeStyle=plasmaColorAtPhase(phase,.24);ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();ctx.restore();
 };
 
 drawFlameField=function(cx,cy,radius,signal,time){const e=clamp(signal.energy),k=clamp(signal.kick||0),phase=time*.035,count=14;for(let i=0;i<count;i++){const angle=i/count*TAU+.035*Math.sin(i*2.7),s=.5+.5*Math.sin(i*12.9898+2.37),s2=.5+.5*Math.sin(i*5.398+1.17);const length=radius*(.075+e*.035+k*.035+s*.025);const width=radius*(.040+s2*.022+e*.008+k*.014);const alpha=.27+e*.20+s*.13+k*.16;drawFlameRay(cx,cy,radius,angle,length,width,phase+i/count,alpha,k);}};
 
-drawAurora=function(width,height){const signal=fastBeatSignal(),cx=width*.5,cy=height*.43,minSide=Math.min(width,height),r=minSide*(.325+signal.bass*.004+(signal.kick||0)*.006),path=buildContourPath(cx,cy,r,signal);const hr=r*(1.55+signal.energy*.06),halo=ctx.createRadialGradient(cx,cy,r*.72,cx,cy,hr);halo.addColorStop(0,'rgba(0,0,0,0)');halo.addColorStop(.55,`rgba(75,60,255,${.05+signal.energy*.04})`);halo.addColorStop(.75,`rgba(190,50,255,${.055+signal.energy*.045})`);halo.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=halo;ctx.beginPath();ctx.arc(cx,cy,hr,0,TAU);ctx.fill();drawFlameField(cx,cy,r,signal,contourClock);drawLayeredRing(path,cx,cy,r,signal,contourClock);ctx.save();ctx.globalCompositeOperation='source-over';ctx.fillStyle='#000';ctx.fill(path);ctx.restore();};
+drawAurora=function(width,height){
+ const signal=fastBeatSignal(),cx=width*.5,cy=height*.43,minSide=Math.min(width,height),r=minSide*(.325+signal.bass*.004+(signal.kick||0)*.006),path=buildContourPath(cx,cy,r,signal);
+ const hr=r*(1.55+signal.energy*.06),halo=ctx.createRadialGradient(cx,cy,r*.72,cx,cy,hr);halo.addColorStop(0,'rgba(0,0,0,0)');halo.addColorStop(.55,`rgba(75,60,255,${.05+signal.energy*.04})`);halo.addColorStop(.75,`rgba(190,50,255,${.055+signal.energy*.045})`);halo.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=halo;ctx.beginPath();ctx.arc(cx,cy,hr,0,TAU);ctx.fill();
+ drawFlameField(cx,cy,r,signal,contourClock);
+ drawLayeredRing(path,cx,cy,r,signal,contourClock);
+ // Restored: moving pulses and reactive hot spots from the previous Plasma Ultra.
+ drawTravellingPulse(cx,cy,r*1.01,signal,contourClock);
+ drawHotSpots(cx,cy,r,signal,contourClock);
+ ctx.save();ctx.globalCompositeOperation='source-over';ctx.fillStyle='#000';ctx.fill(path);ctx.restore();
+};
