@@ -9,6 +9,7 @@ on:
       - 'styles.css'
       - 'bass-wave.js'
       - 'plasma-visualizer.js'
+      - 'plasma-ultra-tuning.js'
       - 'fluid-visualizer.js'
       - 'visual-intensity.js'
       - 'plasma-webgl.js'
@@ -41,7 +42,7 @@ jobs:
         run: |
           rm -rf site
           mkdir -p site
-          cp index.html app.js styles.css bass-wave.js plasma-visualizer.js fluid-visualizer.js visual-intensity.js plasma-webgl.js plasma-webgpu.js controls.css controls.js site/
+          cp index.html app.js styles.css bass-wave.js plasma-visualizer.js plasma-ultra-tuning.js fluid-visualizer.js visual-intensity.js plasma-webgl.js plasma-webgpu.js controls.css controls.js site/
           touch site/.nojekyll
           echo "Web preview assets:"
           ls -lh site
