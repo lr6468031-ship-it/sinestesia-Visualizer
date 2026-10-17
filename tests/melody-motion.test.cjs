@@ -33,3 +33,20 @@ test('silence fades motion and pause freezes phase without retaining tempo', () 
   motion.reset();
   assert.equal(motion.phase, 0);
 });
+
+test('audible sustained music keeps flowing between detected melodic attacks', () => {
+  const motion = new Motion();
+  for (let now = 0; now < 6000; now += 20) motion.update(20, now, now === 0, true, 0.5);
+  assert.ok(motion.speed > 0.3, 'audible sustained notes must not stall the fluid');
+  const before = motion.phase;
+  motion.update(20, 6020, false, true, 0.5);
+  assert.ok(motion.phase > before);
+  for (let now = 6040; now < 12000; now += 20) motion.update(20, now, false, true, 0);
+  assert.ok(motion.speed < 0.001, 'real silence should settle the fluid');
+});
+test('pause freezes flow even while the supplied activity remains high', () => {
+  const motion = sequence(200, 20), before = motion.phase;
+  motion.update(100, 6100, false, false, 1);
+  assert.equal(motion.phase, before);
+  assert.equal(motion.speed, 0);
+});

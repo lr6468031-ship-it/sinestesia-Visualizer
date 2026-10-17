@@ -156,7 +156,7 @@ class MelodyOnsetDetector {
 class MelodyFlowMotion {
   constructor() { this.reset(); }
   reset() { this.phase = 0; this.speed = 0; this.lastHit = null; this.interval = null; this.level = 0; }
-  update(dt, now, hit, playing = true) {
+  update(dt, now, hit, playing = true, activity = 0) {
     if (!playing) { this.speed = 0; this.level = 0; this.lastHit = null; this.interval = null; return this; }
     dt = Math.max(0, Math.min(100, dt));
     if (hit) {
@@ -169,7 +169,7 @@ class MelodyFlowMotion {
       this.level = 1;
     } else this.level *= Math.exp(-dt / 520);
     const active = this.lastHit !== null && now - this.lastHit < Math.max(650, (this.interval || 500) * 1.8);
-    const target = active ? Math.min(8, 1000 / (this.interval || 500)) * Math.PI * 0.65 : 0;
+    const target = active ? Math.min(8, 1000 / (this.interval || 500)) * Math.PI * 0.65 : Math.min(1, activity) * 0.85;
     this.speed += (target - this.speed) * (1 - Math.exp(-dt / (active ? 100 : 200)));
     this.phase += this.speed * dt / 1000;
     return this;
@@ -237,6 +237,7 @@ class MelodyFlowMotion {
     uniform float treble;
     uniform float energy;
     uniform float melodyTime;
+    uniform sampler2D fluidDye;
 
     float hash(vec2 p) {
       p = fract(p * vec2(123.34, 456.21));
@@ -349,7 +350,7 @@ class MelodyFlowMotion {
       float theta = atan(q.y,q.x);
       vec3 membranes = vec3(0.0);
       float population = 2.0 + energy * 5.0;
-      for (int i = 0; i < 7; i++) {
+      for (int i = 0; i < 2; i++) {
         float index = float(i);
         float seed = hash(vec2(index + 3.7,9.2));
         float seed2 = hash(vec2(index + 18.1,4.8));
@@ -387,7 +388,12 @@ class MelodyFlowMotion {
       vec3 rimTint = palette(theta/6.2831853+t*0.04+0.12);
       vec3 interior = membranes * (1.0 + smoothstep(0.86,1.0,r)*0.35) + rimTint*rim*0.28;
       float centerMask = smoothstep(0.004,0.025,r);
-      color += interior*inside*melody*centerMask;
+      vec3 transported = texture2D(fluidDye,q*0.5+0.5).rgb;
+      // Persistent dye is carried between frames; the analytic sheet is only a faint source.
+      vec3 fluidLight = transported * 2.2;
+      float fusion = min(transported.r,transported.b);
+      fluidLight += vec3(0.70,0.85,1.0)*pow(fusion,1.6)*0.45;
+      color += (interior*melody*0.18 + fluidLight) * inside * centerMask;
       color += edgeColor * exp(-distanceToEdge*55.0) * exterior * (0.06+melody*0.09);
       float nucleus = exp(-r*80.0);
       float nucleusHalo = exp(-r*18.0);
@@ -397,6 +403,131 @@ class MelodyFlowMotion {
       gl_FragColor = vec4(color,1.0);
     }
   `;
+
+  // Low-resolution, persistent dye transport. RGBA8 works on mobile WebGL 1
+  // without float-texture extensions; the final lighting stays at display resolution.
+  const transportSource = `
+    precision highp float;
+    varying vec2 uv;
+    uniform sampler2D previousDye;
+    uniform float dt, flowTime, phase, intensity, sourceLevel;
+    uniform vec2 texel;
+    vec2 velocity(vec2 p) {
+      float wall = max(0.0,1.0-dot(p,p));
+      vec2 gradient = vec2(0.0);
+      // Curl of a streamfunction: divergence-free vortices tangent to the sphere wall.
+      for(int i=0;i<4;i++) {
+        float index=float(i), angle=index*1.5707963+flowTime*0.17;
+        vec2 center=vec2(cos(angle),sin(angle))*(0.28+0.14*sin(flowTime*0.23+index));
+        vec2 delta=p-center;
+        float size=0.22+0.05*sin(flowTime*0.21+index*1.7);
+        float g=exp(-dot(delta,delta)/size);
+        float strength=mix(-0.30,0.38,mod(index,2.0));
+        gradient+=strength*g*(-4.0*p*wall-wall*wall*2.0*delta/size);
+      }
+      vec2 curl=vec2(gradient.y,-gradient.x);
+      return curl+vec2(-p.y,p.x)*wall*(0.12+0.08*sin(flowTime*0.31));
+    }
+    void main() {
+      vec2 p=(uv-0.5)*2.0;
+      float r=length(p);
+      if(r>1.0) {gl_FragColor=vec4(0.0);return;}
+      // Midpoint backtrace reduces trajectory error on curved paths.
+      vec2 v=velocity(p);
+      vec2 back=p-velocity(p-v*dt*0.5)*dt;
+      vec2 sampleUv=back*0.5+0.5;
+      vec3 dye=texture2D(previousDye,sampleUv).rgb;
+      vec3 neighbors=(texture2D(previousDye,sampleUv+vec2(texel.x,0.0)).rgb
+                     +texture2D(previousDye,sampleUv-vec2(texel.x,0.0)).rgb
+                     +texture2D(previousDye,sampleUv+vec2(0.0,texel.y)).rgb
+                     +texture2D(previousDye,sampleUv-vec2(0.0,texel.y)).rgb)*0.25;
+      dye=mix(dye,neighbors,1.0-exp(-dt*1.2))*exp(-dt*0.50);
+      vec3 source=vec3(0.0);
+      float theta=atan(p.y,p.x);
+      for(int i=0;i<7;i++) {
+        float index=float(i),group=mod(index,2.0);
+        float primary=1.0-step(1.5,index);
+        float active=smoothstep(index-0.5,index+0.5,2.0+intensity*5.0);
+        float spread=(1.0-primary)*sin(index*7.3)*0.8;
+        float angle=-0.8+phase*0.10+group*3.14159265+spread
+                   +r*1.1+sin(r*3.2-phase*0.18+group*2.2)*r*0.6;
+        float delta=theta-angle;
+        float across=sin(delta)*r;
+        float width=0.018+pow(r,1.2)*(0.16+0.10*sin(r*3.0-phase*0.12+index)*sin(r*3.0-phase*0.12+index));
+        width*=mix(0.65,1.65,smoothstep(-0.03,0.05,across));
+        float sheet=exp(-pow(across/width,2.0))*smoothstep(-0.1,0.3,cos(delta));
+        float tint=0.5+0.5*sin(group*2.4+r*2.0+phase*0.08+index*0.2);
+        vec3 color=mix(vec3(0.13,0.45,1.0),vec3(1.0,0.13,0.63),tint);
+        float ridge=exp(-pow((across+width*0.22)/(width*0.30),2.0))*smoothstep(-0.1,0.3,cos(delta));
+        vec3 pigment=color*sheet*0.82+mix(color,vec3(0.80,0.87,1.0),0.55)*ridge*0.38;
+        source+=pigment*active*mix(0.24,1.0,primary);
+      }
+      source*=sourceLevel*(0.40+intensity*0.60)*(1.0-smoothstep(0.94,1.0,r));
+      float emission=1.0-exp(-dt*1.8);
+      dye=mix(dye,clamp(source,0.0,1.0),emission);
+      gl_FragColor=vec4(dye,1.0);
+    }
+  `;
+  let transportProgram = null, transportLocations = null;
+  let dyeTargets = [], dyeIndex = 0, flowTime = 0, fluidSteps = 0, fluidLast = 0;
+  const dyeSize = 192;
+
+  function bindQuad(targetProgram) {
+    gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+    const attribute=gl.getAttribLocation(targetProgram,'position');
+    gl.enableVertexAttribArray(attribute);
+    gl.vertexAttribPointer(attribute,2,gl.FLOAT,false,0,0);
+  }
+
+  function buildTransport() {
+    const vs=compile(gl.VERTEX_SHADER,vertexSource),fs=compile(gl.FRAGMENT_SHADER,transportSource);
+    transportProgram=gl.createProgram();gl.attachShader(transportProgram,vs);gl.attachShader(transportProgram,fs);gl.linkProgram(transportProgram);
+    gl.deleteShader(vs);gl.deleteShader(fs);
+    if(!gl.getProgramParameter(transportProgram,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(transportProgram));
+    transportLocations={};
+    for(const name of ['previousDye','dt','flowTime','phase','intensity','sourceLevel','texel'])transportLocations[name]=gl.getUniformLocation(transportProgram,name);
+    dyeTargets=[];
+    for(let i=0;i<2;i++) {
+      const texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,dyeSize,dyeSize,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+      const framebuffer=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);
+      if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Fluid framebuffer unavailable');
+      gl.clear(gl.COLOR_BUFFER_BIT);dyeTargets.push({texture,framebuffer});
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);dyeIndex=0;flowTime=0;fluidSteps=0;fluidLast=0;
+  }
+
+  function resetTransport() {
+    if(!ready||contextLost)return;
+    for(const target of dyeTargets){gl.bindFramebuffer(gl.FRAMEBUFFER,target.framebuffer);gl.clear(gl.COLOR_BUFFER_BIT);}
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);flowTime=0;fluidSteps=0;fluidLast=0;
+  }
+
+  function transportFluid(signal, now) {
+    const elapsed=fluidLast?Math.max(0,Math.min(0.05,(now-fluidLast)/1000)):1/60;
+    fluidLast=now;
+    if(!audio.paused) {
+      // Keep inertia through the spaces between melodic onsets.
+      const rate=0.35+Math.min(8,melodyMotion.speed)*0.16;
+      const dt=elapsed*rate;
+      flowTime+=dt;
+      gl.useProgram(transportProgram);bindQuad(transportProgram);
+      const target=1-dyeIndex;
+      gl.bindFramebuffer(gl.FRAMEBUFFER,dyeTargets[target].framebuffer);gl.viewport(0,0,dyeSize,dyeSize);
+      gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,dyeTargets[dyeIndex].texture);
+      gl.uniform1i(transportLocations.previousDye,0);gl.uniform1f(transportLocations.dt,dt);
+      gl.uniform1f(transportLocations.flowTime,flowTime);gl.uniform1f(transportLocations.phase,signal.motion);
+      gl.uniform1f(transportLocations.intensity,signal.intensity);
+      gl.uniform1f(transportLocations.sourceLevel,Math.max(signal.melody,Math.min(1,signal.intensity*1.7)));
+      gl.uniform2f(transportLocations.texel,1/dyeSize,1/dyeSize);gl.drawArrays(gl.TRIANGLES,0,6);
+      dyeIndex=target;fluidSteps++;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    window.sinestesiaFluidTransport={steps:fluidSteps,time:flowTime,resolution:dyeSize};
+  }
 
   function compile(type, source) {
     const shader = gl.createShader(type);
@@ -444,9 +575,11 @@ class MelodyFlowMotion {
       treble: gl.getUniformLocation(program, 'treble'),
       energy: gl.getUniformLocation(program, 'energy'),
       melodyTime: gl.getUniformLocation(program, 'melodyTime'),
+      fluidDye: gl.getUniformLocation(program, 'fluidDye'),
     };
 
     gl.clearColor(0, 0, 0, 1);
+    buildTransport();
     ready = true;
   }
 
@@ -510,6 +643,7 @@ class MelodyFlowMotion {
     tempo.reset();
     melodyMotion.reset();
     melodyMotion.phase = heldPhase;
+    if(event?.type !== 'pause')resetTransport();
     lastPulseFrame = 0;
     musicIntensity = 0;
     melodyPulse = 0;
@@ -556,7 +690,7 @@ class MelodyFlowMotion {
       if (melodyHit) { melodyPulse = 1; melodySeed += 1.618; }
     }
     if (audio.paused) musicIntensity = 0;
-    melodyMotion.update(dt, now, tonalHit, !audio.paused);
+    melodyMotion.update(dt, now, tonalHit, !audio.paused, musicIntensity);
     window.sinestesiaKickReadout = { intensity: musicIntensity, plasmaCount: 2 + musicIntensity * 5, melodySpeed: melodyMotion.speed, melodyPhase: melodyMotion.phase, pulse, snare: snarePulse, melody: melodyPulse, melodyHz: melodyPulse > 0.05 ? melodyDetector.peakHz : 0, hz: pulse > 0.05 ? kickDetector.peakHz : 0, bpm: tempo.bpm, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
     const gain = Number(document.getElementById('fluidIntensity').value) || 1.35;
     return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35), melody: Math.min(1, melodyMotion.level * gain / 1.35), intensity: musicIntensity, motion: melodyMotion.phase, note: melodySeed + Math.min(1, melodyDetector.peakHz / 8000) };
@@ -694,11 +828,15 @@ class MelodyFlowMotion {
 
     const percussion = fluidSignal();
     const signal = { bass: percussion.kick, mid: percussion.snare, treble: percussion.melody, energy: percussion.intensity };
+    transportFluid(percussion,now);
     surface.style.filter = baseCanvas.style.filter;
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(program);
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    bindQuad(program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D,dyeTargets[dyeIndex].texture);
+    gl.uniform1i(locations.fluidDye,0);
     gl.uniform2f(locations.resolution, w, h);
     gl.uniform1f(locations.time, contourClock * getColorSpeed() * 0.5);
     gl.uniform1f(locations.bass, signal.bass);
