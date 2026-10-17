@@ -40,6 +40,46 @@ class KickOnsetDetector {
   }
 }
 
+// Snare requires a body transient AND a broadband attack; hats and bass alone fail.
+class SnareOnsetDetector {
+  constructor() { this.reset(); }
+  reset() {
+    this.previous = 0; this.baseline = 0; this.fluxMean = 0;
+    this.lastTime = null; this.started = null; this.lastHit = -Infinity;
+  }
+  update(spectrum, sampleRate, now) {
+    const binHz = sampleRate / (spectrum.length * 2);
+    const mean = (lo, hi) => {
+      let sum = 0, count = 0;
+      for (let i = Math.ceil(lo / binHz); i * binHz <= hi && i < spectrum.length; i++) {
+        sum += Math.pow(10, spectrum[i] / 10); count++;
+      }
+      return sum / Math.max(1, count);
+    };
+    const body = mean(150, 300), snap = mean(2000, 6000);
+    const low = mean(30, 100), air = mean(8000, 14000);
+    let occupied = 0, count = 0;
+    for (let i = Math.ceil(2000 / binHz); i * binHz <= 6000 && i < spectrum.length; i++) {
+      if (Math.pow(10, spectrum[i] / 10) > snap * 0.1) occupied++;
+      count++;
+    }
+    const energy = Math.sqrt(body * snap);
+    if (this.started === null) this.started = now;
+    const dt = this.lastTime === null ? 24 : Math.max(1, Math.min(100, now - this.lastTime));
+    const flux = Math.max(0, energy - this.previous);
+    const hit = now - this.started >= 100 && now - this.lastHit >= 140
+      && body > 1e-7 && snap > 1e-7 && snap > low * 0.08
+      && body > air * 0.12 && occupied > count * 0.25
+      && energy > this.baseline * 1.8
+      && flux > Math.max(1e-7, this.fluxMean * 2.8, this.previous * 0.35);
+    if (hit) this.lastHit = now;
+    this.baseline += (energy - this.baseline) * (1 - Math.exp(-dt / 450));
+    this.fluxMean += (flux - this.fluxMean) * (1 - Math.exp(-dt / 600));
+    this.previous = energy; this.lastTime = now;
+    return hit ? Math.min(1, 0.65 + flux / Math.max(energy, 1e-7) * 0.35) : 0;
+  }
+}
+
 // WebGL plasma fallback for Sinestesia Visualizer.
 // Performance-tuned for mobile while preserving the electric organic look.
 (() => {
@@ -150,13 +190,24 @@ class KickOnsetDetector {
       float a = atan(p.y, p.x);
       float contour = radius * (1.0 + pulse * 0.035 * sin(a * 3.0));
       float distanceToEdge = abs(length(p) - contour);
-      float thickness = 0.0018 + pulse * 0.0018;
+      float snare = clamp(mid, 0.0, 1.0);
+      float thickness = 0.006 + pulse * 0.003 + snare * 0.002;
       float edge = 1.0 - smoothstep(thickness, thickness + 0.002, distanceToEdge);
-      // No surface, ribbons or inward bloom: the center remains completely black.
-      float exterior = step(contour, length(p));
-      float bloom = exp(-distanceToEdge * 180.0) * exterior;
+      float exterior = step(contour + thickness, length(p));
       vec3 edgeColor = palette(a / 6.2831853 + 0.5);
-      vec3 color = edgeColor * (edge * (0.5 + pulse * 1.5) + bloom * pulse * 0.35);
+      // White turbulence is clipped to the colored stroke, never the black center.
+      float plasma = fbm(vec2(a * 8.0, time * 4.0 + distanceToEdge * 400.0));
+      float core = (1.0 - smoothstep(thickness * 0.12, thickness * 0.63, distanceToEdge))
+                 * (0.6 + plasma * 0.7);
+      float bloom = exp(-distanceToEdge * 100.0) * exterior;
+      float outward = max(0.0, length(p) - contour - thickness);
+      float curtain = 0.025 + snare * (0.035 + 0.065 * fbm(vec2(a * 10.0, time * 3.0)));
+      float rays = pow(0.5 + 0.5 * sin(a * 65.0 + plasma * 7.0), 3.0);
+      float aurora = exterior * snare * exp(-outward / curtain)
+                   * (1.0 - smoothstep(curtain, curtain * 2.0, outward)) * (0.25 + rays);
+      vec3 color = edgeColor * (edge * (1.3 + pulse + snare) + bloom * (0.4 + pulse * 0.5));
+      color += vec3(1.0) * core * edge * (1.15 + pulse + snare * 1.5);
+      color += mix(edgeColor, vec3(1.0), 0.35) * aurora * 2.0;
       color = vec3(1.0) - exp(-color * 1.35);
       gl_FragColor = vec4(color,1.0);
     }
@@ -253,11 +304,15 @@ class KickOnsetDetector {
   let kickAnalyser = null;
   let kickSpectrum = null;
   const kickDetector = new KickOnsetDetector();
+  const snareDetector = new SnareOnsetDetector();
+  let snarePulse = 0;
   let lastPulseFrame = 0;
   let pulse = 0;
 
   function resetKick() {
     kickDetector.reset();
+    snareDetector.reset();
+    snarePulse = 0;
     pulse = 0;
   }
   audio.addEventListener('seeking', resetKick);
@@ -269,6 +324,7 @@ class KickOnsetDetector {
     const dt = Math.min(100, lastPulseFrame ? now - lastPulseFrame : 24);
     lastPulseFrame = now;
     pulse *= Math.exp(-dt / 150);
+    snarePulse *= Math.exp(-dt / 95);
     if (!audio.paused && source && audioContext) {
       if (!kickAnalyser) {
         // Independent, unsmoothed FFT: visual smoothing must not hide kick attacks.
@@ -281,24 +337,44 @@ class KickOnsetDetector {
       kickAnalyser.getFloatFrequencyData(kickSpectrum);
       const hit = kickDetector.update(kickSpectrum, audioContext.sampleRate, now);
       if (hit) pulse = Math.max(pulse, hit);
+      const snareHit = snareDetector.update(kickSpectrum, audioContext.sampleRate, now);
+      if (snareHit) snarePulse = Math.max(snarePulse, snareHit);
     }
-    window.sinestesiaKickReadout = { pulse, hz: pulse > 0.05 ? kickDetector.peakHz : 0, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
+    window.sinestesiaKickReadout = { pulse, snare: snarePulse, hz: pulse > 0.05 ? kickDetector.peakHz : 0, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
     const gain = Number(document.getElementById('fluidIntensity').value) || 1.35;
-    return Math.min(1, pulse * gain / 1.35);
+    return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35) };
   }
 
   function drawKickFallback(width, height) {
-    const level = readKickPulse();
+    const signal = readKickPulse();
+    const level = signal.kick;
     const radius = height * (0.255 + level * 0.055);
     const gradient = ctx.createConicGradient(0, width / 2, height * 0.43);
     ['#08cfff', '#7433ff', '#ff2099', '#073dcc', '#08cfff'].forEach((color, i) => gradient.addColorStop(i / 4, color));
     ctx.save();
     ctx.strokeStyle = gradient;
-    ctx.lineWidth = 1.5 + level * 3;
-    ctx.globalAlpha = 0.5 + level * 0.5;
+    ctx.lineWidth = height * (0.012 + level * 0.006);
+    ctx.globalAlpha = 1;
     ctx.beginPath();
     ctx.arc(width / 2, height * 0.43, radius, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth *= 0.3;
+    ctx.stroke();
+    if (signal.snare > 0.01) {
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = Math.max(1, height * 0.003);
+      for (let i = 0; i < 96; i++) {
+        const a = i / 96 * Math.PI * 2;
+        const reach = height * signal.snare * (0.025 + 0.04 * (0.5 + 0.5 * Math.sin(i * 13.7 + contourClock * 12)));
+        ctx.globalAlpha = signal.snare * 0.7;
+        const start = radius + height * (0.006 + level * 0.003);
+        ctx.beginPath();
+        ctx.moveTo(width / 2 + Math.cos(a) * start, height * 0.43 + Math.sin(a) * start);
+        ctx.lineTo(width / 2 + Math.cos(a) * (start + reach), height * 0.43 + Math.sin(a) * (start + reach));
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   }
 
@@ -349,7 +425,8 @@ class KickOnsetDetector {
       surface.height = h;
     }
 
-    const signal = { bass: readKickPulse(), mid: 0, treble: 0, energy: 0 };
+    const percussion = readKickPulse();
+    const signal = { bass: percussion.kick, mid: percussion.snare, treble: 0, energy: 0 };
     surface.style.filter = baseCanvas.style.filter;
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT);

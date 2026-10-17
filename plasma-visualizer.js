@@ -376,10 +376,10 @@ function contourFrame(now) {
     const kick = window.sinestesiaKickReadout || { pulse: 0, hz: 0, level: 0 };
     bassValue.textContent = Math.round(kick.pulse * 100);
     midValue.textContent = kick.hz ? Math.round(kick.hz) : "—";
-    trebleValue.textContent = Math.round(kick.level * 100);
-    if (instrumentValue) instrumentValue.textContent = 'Kick · detección de ataques graves';
+    trebleValue.textContent = Math.round((kick.snare || 0) * 100);
+    if (instrumentValue) instrumentValue.textContent = 'Kick + snare · detección de ataques';
     const notice = document.getElementById('visualNotice');
-    if (notice) notice.textContent = 'Pulso de kick · 30–160 Hz · énfasis en 43–80 Hz';
+    if (notice) notice.textContent = 'Kick: graves · Snare: cuerpo 150–300 Hz + ataque 2–6 kHz';
   }
 
   animationFrame = requestAnimationFrame(contourFrame);

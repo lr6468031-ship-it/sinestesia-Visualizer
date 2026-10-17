@@ -16,7 +16,7 @@
         <h1>Audio Visualizer</h1>
       </div>
       <div class="visual-options">
-        <label>Estilo <select id="visualMode"><option value="plasma" selected>Contorno · Kick</option></select></label>
+        <label>Estilo <select id="visualMode"><option value="plasma" selected>Plasma · Kick + Snare</option></select></label>
         <label>Intensidad <input id="fluidIntensity" type="range" min="0.7" max="2" step="0.05" value="1.35" /></label>
         <label hidden style="display:none">Velocidad del flujo <input id="colorSpeed" type="range" min="0.2" max="4" step="0.1" value="1.6" /></label>
         <small id="visualNotice" role="status"></small>
@@ -67,13 +67,13 @@
       <div class="meter-card" aria-label="Niveles de frecuencia">
         <div><span>Pulso del kick</span><strong id="bassValue">0</strong></div>
         <div><span>Fundamental aprox. · Hz</span><strong id="midValue">0</strong></div>
-        <div><span>Energía grave</span><strong id="trebleValue">0</strong></div>
+        <div><span>Pulso del snare</span><strong id="trebleValue">0</strong></div>
       </div>
 
       <div class="detection-card" aria-live="polite">
-        <span>Detección de kick</span>
+        <span>Detección de percusión</span>
         <strong id="instrumentValue">Sin señal</strong>
-        <small>Detecta ataques graves con umbral adaptativo; un bajo percusivo puede parecerse al kick.</small>
+        <small>Kick: expansión grave. Snare: destello y aurora exterior. Detección aproximada por ataque y espectro.</small>
       </div>
     </section>
 
