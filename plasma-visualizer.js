@@ -377,6 +377,8 @@ function contourFrame(now) {
     bassValue.textContent = Math.round(kick.pulse * 100);
     midValue.textContent = kick.hz ? Math.round(kick.hz) : "—";
     trebleValue.textContent = Math.round((kick.snare || 0) * 100);
+    const bpmLabel = document.getElementById('bpmValue');
+    if (bpmLabel) bpmLabel.textContent = kick.bpm ? `BPM aprox. ${kick.bpm} · al reproducir: ${Math.round(kick.bpm * audio.playbackRate)}` : 'BPM aprox. · esperando golpes regulares';
     const melodyActivity = document.getElementById('melodyActivity');
     if (melodyActivity) melodyActivity.textContent = kick.melodyHz ? `Nota tonal aprox. ${Math.round(kick.melodyHz)} Hz · mini pulso ${Math.round(kick.melody * 100)}%` : 'Melodía · sin notas detectadas';
     if (instrumentValue) instrumentValue.textContent = 'Kick + snare + notas · detección de ataques';

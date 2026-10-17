@@ -1,3 +1,32 @@
+// XY gates use the peak dBFS within each selected frequency band, matching the graph.
+function withinDetectionBox(spectrum, sampleRate, lo, hi, kind, settings) {
+  if (!Number.isFinite(settings[`${kind}Level`])) return true;
+  const binHz = sampleRate / (2 * spectrum.length);
+  let peak = -Infinity;
+  for (let i = Math.max(1, Math.ceil(lo / binHz)); i < spectrum.length && i * binHz <= hi; i++) peak = Math.max(peak, spectrum[i]);
+  const level = settings[`${kind}Level`], tolerance = Math.max(5, Math.min(50, Number(settings[`${kind}Tolerance`]) || 40));
+  return peak >= level - tolerance && peak <= Math.min(0, level + tolerance);
+}
+
+class BeatTempoEstimator {
+  constructor() { this.reset(); }
+  reset() { this.times = []; this.bpm = null; }
+  add(time) {
+    if (this.times.length && time <= this.times[this.times.length - 1]) this.reset();
+    this.times.push(time); if (this.times.length > 17) this.times.shift();
+    if (this.times.length < 6) return null;
+    const intervals = this.times.slice(1).map((t, i) => t - this.times[i]).filter(x => x >= 200 && x <= 2000);
+    if (intervals.length < 5) return this.bpm = null;
+    const sorted = [...intervals].sort((a,b) => a-b), median = sorted[Math.floor(sorted.length/2)];
+    const regular = intervals.filter(x => Math.abs(x - median) / median < 0.15);
+    if (regular.length < intervals.length * 0.7) return this.bpm = null;
+    let bpm = 60000 / (regular.reduce((a,b)=>a+b,0) / regular.length);
+    while (bpm < 60) bpm *= 2;
+    while (bpm > 180) bpm /= 2;
+    return this.bpm = Math.round(bpm);
+  }
+}
+
 // Adaptive kick onset detection, restricted to low frequencies (30–160 Hz).
 // A transient detector, not source separation: bass plucks can resemble a kick.
 class KickOnsetDetector {
@@ -30,6 +59,7 @@ class KickOnsetDetector {
     const dt = this.lastTime === null ? 24 : Math.max(1, Math.min(100, now - this.lastTime));
     const flux = Math.max(0, energy - this.previous);
     const hit = now - this.started >= 100 && now - this.lastHit >= 170
+      && withinDetectionBox(spectrum, sampleRate, center * 0.5, center * 1.5, 'kick', settings)
       && body > 1e-6 / sensitivity && energy > this.baseline * (1 + 0.65 / sensitivity)
       && flux > Math.max(1e-6 / sensitivity, this.fluxMean * (1 + 1.5 / sensitivity), this.previous * 0.3 / sensitivity);
     const strength = hit ? Math.min(1, 0.55 + flux / Math.max(energy, 1e-6) * 0.45) : 0;
@@ -72,6 +102,7 @@ class SnareOnsetDetector {
     const dt = this.lastTime === null ? 24 : Math.max(1, Math.min(100, now - this.lastTime));
     const flux = Math.max(0, energy - this.previous);
     const hit = now - this.started >= 100 && now - this.lastHit >= 140
+      && withinDetectionBox(spectrum, sampleRate, center * 0.75, center * 1.5, 'snare', settings)
       && body > 1e-7 / sensitivity && snap > 1e-7 / sensitivity && snap > low * 0.08
       && body > air * 0.12 && occupied > count * 0.25
       && energy > this.baseline * (1 + 0.8 / sensitivity)
@@ -112,6 +143,7 @@ class MelodyOnsetDetector {
     if (this.started === null) this.started = now;
     const dt = this.lastTime === null ? 24 : Math.max(1, Math.min(100, now - this.lastTime));
     const hit = now - this.started >= 100 && now - this.lastHit >= 95 && tonal
+      && withinDetectionBox(spectrum, sampleRate, lo, hi, 'melody', settings)
       && peak > 1e-6 / sensitivity && flux > Math.max(3e-7 / sensitivity, this.fluxMean * (1 + 1.5 / sensitivity), sum * 0.12 / sensitivity);
     if (hit) { this.lastHit = now; this.peakHz = peakHz; }
     this.fluxMean += (flux - this.fluxMean) * (1 - Math.exp(-dt / 450));
@@ -234,13 +266,14 @@ class MelodyOnsetDetector {
       float pulse = clamp(bass, 0.0, 1.0);
       float radius = 0.255 + pulse * 0.055;
       float a = atan(p.y, p.x);
-      float contour = radius * (1.0 + pulse * 0.035 * sin(a * 3.0));
+      float contour = radius * (1.0 + pulse * 0.035 * sin(a * 3.0)
+        + 0.009 * sin(a * 5.0 + time * 0.7) + 0.006 * sin(a * 9.0 - time * 0.5));
       float distanceToEdge = abs(length(p) - contour);
       float snare = clamp(mid, 0.0, 1.0);
       float thickness = 0.006 + pulse * 0.003 + snare * 0.002;
       float edge = 1.0 - smoothstep(thickness, thickness + 0.002, distanceToEdge);
       float exterior = step(contour + thickness, length(p));
-      vec3 edgeColor = palette(a / 6.2831853 + 0.5);
+      vec3 edgeColor = palette(a / 6.2831853 + 0.5 + time * 0.025);
       // White turbulence is clipped to the colored stroke, never the black center.
       float plasma = fbm(vec2(a * 8.0, time * 4.0 + distanceToEdge * 400.0));
       float core = (1.0 - smoothstep(thickness * 0.12, thickness * 0.63, distanceToEdge))
@@ -268,8 +301,9 @@ class MelodyOnsetDetector {
         vec2 normal = normalize(vec2(-(next - star).y, (next - star).x));
         vec2 joint = mix(star, next, 0.48) + normal * sin(index * 7.0 + time * 18.0) * 0.009 * melody;
         float bolt = min(segmentDistance(p, star, joint), segmentDistance(p, joint, next));
-        float link = exp(-bolt * 1000.0) * (0.15 + melody * 0.5);
-        vec3 tint = mix(palette(index / 7.0), vec3(0.7, 1.0, 0.9), 0.65);
+        float form = smoothstep(0.0, 0.22, 1.0 - melody);
+        float link = exp(-bolt * 1000.0) * form * (0.15 + melody * 0.5);
+        vec3 tint = mix(palette(index / 7.0 + time * 0.025), vec3(0.7, 1.0, 0.9), 0.65);
         stars += tint * (dotGlow * (1.5 + sparkle) + link) * melody;
       }
       }
@@ -373,6 +407,8 @@ class MelodyOnsetDetector {
   const kickDetector = new KickOnsetDetector();
   const snareDetector = new SnareOnsetDetector();
   const melodyDetector = new MelodyOnsetDetector();
+  const tempo = new BeatTempoEstimator();
+  let melodySeed = 0;
   let melodyPulse = 0;
   let snarePulse = 0;
   let lastPulseFrame = 0;
@@ -382,6 +418,7 @@ class MelodyOnsetDetector {
     kickDetector.reset();
     snareDetector.reset();
     melodyDetector.reset();
+    tempo.reset();
     melodyPulse = 0;
     snarePulse = 0;
     pulse = 0;
@@ -397,7 +434,7 @@ class MelodyOnsetDetector {
     lastPulseFrame = now;
     pulse *= Math.exp(-dt / 150);
     snarePulse *= Math.exp(-dt / 95);
-    melodyPulse *= Math.exp(-dt / 110);
+    melodyPulse *= Math.exp(-dt / 220);
     if (!audio.paused && source && audioContext) {
       if (!kickAnalyser) {
         // Independent, unsmoothed FFT: visual smoothing must not hide kick attacks.
@@ -410,22 +447,22 @@ class MelodyOnsetDetector {
       kickAnalyser.getFloatFrequencyData(kickSpectrum);
       if (window.sinestesiaSpectrumFrame) window.sinestesiaSpectrumFrame(kickSpectrum, audioContext.sampleRate, now);
       const hit = kickDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
-      if (hit) pulse = Math.max(pulse, hit);
+      if (hit) { pulse = Math.max(pulse, hit); tempo.add(audio.currentTime * 1000); }
       const snareHit = snareDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
       if (snareHit) snarePulse = Math.max(snarePulse, snareHit);
       const melodyHit = melodyDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
-      if (melodyHit) melodyPulse = Math.max(melodyPulse, melodyHit);
+      if (melodyHit) { melodyPulse = 1; melodySeed += 1.618; }
     }
-    window.sinestesiaKickReadout = { pulse, snare: snarePulse, melody: melodyPulse, melodyHz: melodyPulse > 0.05 ? melodyDetector.peakHz : 0, hz: pulse > 0.05 ? kickDetector.peakHz : 0, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
+    window.sinestesiaKickReadout = { pulse, snare: snarePulse, melody: melodyPulse, melodyHz: melodyPulse > 0.05 ? melodyDetector.peakHz : 0, hz: pulse > 0.05 ? kickDetector.peakHz : 0, bpm: tempo.bpm, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
     const gain = Number(document.getElementById('fluidIntensity').value) || 1.35;
-    return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35), melody: Math.min(1, melodyPulse * gain / 1.35), note: Math.min(1, melodyDetector.peakHz / 8000) };
+    return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35), melody: Math.min(1, melodyPulse * gain / 1.35), note: melodySeed + Math.min(1, melodyDetector.peakHz / 8000) };
   }
 
   function drawKickFallback(width, height) {
     const signal = readKickPulse();
     const level = signal.kick;
     const radius = height * (0.255 + level * 0.055);
-    const gradient = ctx.createConicGradient(0, width / 2, height * 0.43);
+    const gradient = ctx.createConicGradient(contourClock * 0.025, width / 2, height * 0.43);
     ['#08cfff', '#7433ff', '#ff2099', '#073dcc', '#08cfff'].forEach((color, i) => gradient.addColorStop(i / 4, color));
     ctx.save();
     ctx.strokeStyle = gradient;
@@ -457,10 +494,10 @@ class MelodyOnsetDetector {
       ctx.globalAlpha = signal.melody;
       const stars = Array.from({ length: 7 }, (_, i) => {
         const angle = i * 2.39996 + Math.sin(contourClock * 0.35 + i) * 0.18 + signal.note * 1.8;
-        const orbit = radius * (0.22 + 0.36 * (0.5 + 0.5 * Math.sin(i * 8.7)));
+        const orbit = radius * (0.22 + 0.36 * (0.5 + 0.5 * Math.sin(i * 8.7 + signal.note * 3.0)));
         return { x: width / 2 + Math.cos(angle) * orbit, y: height * 0.43 + Math.sin(angle) * orbit };
       });
-      ctx.strokeStyle = '#83ddff'; ctx.lineWidth = 1;
+      ctx.strokeStyle = `hsl(${(contourClock * 4 + signal.note * 30) % 360} 85% 80%)`; ctx.lineWidth = 1;
       stars.forEach((star, i) => {
         const next = stars[(i + 1) % stars.length];
         ctx.beginPath(); ctx.moveTo(star.x, star.y);
@@ -538,8 +575,8 @@ class MelodyOnsetDetector {
     for (let i = 0; i < 8; i++) {
       const index = i % 7;
       const t = contourClock * getColorSpeed() * 0.5;
-      const angle = index * 2.39996 + Math.sin(t * 0.35 + index) * 0.18 + signal.energy * 1.8;
-      const orbit = 0.05 + 0.10 * (0.5 + 0.5 * Math.sin(index * 8.7));
+      const angle = index * 2.39996 + Math.sin(t * 0.9 + index + signal.energy) * 0.45 + signal.energy * 1.8;
+      const orbit = (0.055 + 0.12 * (0.5 + 0.5 * Math.sin(index * 8.7 + signal.energy * 3.0))) * (0.65 + 0.35 * (1 - signal.treble));
       points[i * 2] = Math.cos(angle) * orbit + Math.sin(t * 0.6 + index * 2) * 0.014;
       points[i * 2 + 1] = Math.sin(angle) * orbit + Math.cos(t * 0.5 + index) * 0.014;
     }

@@ -107,8 +107,8 @@
   const surface = document.getElementById('spectrumCanvas');
   if (!toggle || !surface) return;
   const context = surface.getContext('2d');
-  const defaults = { kickHz: 60, snareHz: 200, kickSensitivity: 1, snareSensitivity: 1, melodyHz: 700, melodySensitivity: 1, melodyWidth: 2 };
-  const limits = { kickHz: [30, 300], snareHz: [100, 1500], kickSensitivity: [0.5, 2], snareSensitivity: [0.5, 2], melodyHz: [100, 8000], melodySensitivity: [0.5, 2], melodyWidth: [0.5, 4] };
+  const defaults = { kickHz: 60, snareHz: 200, kickSensitivity: 1, snareSensitivity: 1, melodyHz: 700, melodySensitivity: 1, melodyWidth: 2, kickLevel: -40, snareLevel: -40, melodyLevel: -40, kickTolerance: 40, snareTolerance: 40, melodyTolerance: 40 };
+  const limits = { kickHz: [30, 300], snareHz: [100, 1500], kickSensitivity: [0.5, 2], snareSensitivity: [0.5, 2], melodyHz: [100, 8000], melodySensitivity: [0.5, 2], melodyWidth: [0.5, 4], kickLevel: [-95, -5], snareLevel: [-95, -5], melodyLevel: [-95, -5], kickTolerance: [5, 50], snareTolerance: [5, 50], melodyTolerance: [5, 50] };
   const key = 'sinestesia-detection-v1';
   const settings = { ...defaults };
   try {
@@ -129,12 +129,18 @@
       const lo = kind === 'melody' ? hz / factor : hz * (kind === 'kick' ? 0.5 : 0.75);
       const hi = kind === 'melody' ? Math.min(16000, hz * factor) : hz * 1.5;
       point.style.left = `${fraction(hz) * 100}%`;
+      point.style.top = `${-settings[`${kind}Level`]}%`;
       point.setAttribute('aria-valuenow', Math.round(hz));
-      point.setAttribute('aria-valuetext', `${Math.round(hz)} Hz, banda ${Math.round(lo)} a ${Math.round(hi)} Hz`);
+      point.setAttribute('aria-valuetext', `${Math.round(hz)} Hz, banda ${Math.round(lo)} a ${Math.round(hi)} Hz, nivel ${settings[`${kind}Level`]} dB`);
       const band = document.getElementById(`${kind}Band`);
       band.style.left = `${fraction(lo) * 100}%`;
+      const level = settings[`${kind}Level`], tolerance = settings[`${kind}Tolerance`];
+      const upper = Math.min(0, level + tolerance), lower = Math.max(-100, level - tolerance);
+      band.style.top = `${-upper}%`; band.style.height = `${upper - lower}%`; band.style.bottom = "auto";
+      document.getElementById(`${kind}Tolerance`).value = tolerance;
+      document.getElementById(`${kind}ToleranceValue`).textContent = tolerance;
       band.style.width = `${(fraction(hi) - fraction(lo)) * 100}%`;
-      document.getElementById(`${kind}Range`).textContent = `${kind === 'kick' ? 'Kick' : kind === 'snare' ? 'Snare' : 'Melodía'} · ${Math.round(lo)}–${Math.round(hi)} Hz`;
+      document.getElementById(`${kind}Range`).textContent = `${kind === 'kick' ? 'Kick' : kind === 'snare' ? 'Snare' : 'Melodía'} · ${Math.round(lo)}–${Math.round(hi)} Hz · ${Math.round(lower)} a ${Math.round(upper)} dB`;
       document.getElementById(`${kind}Sensitivity`).value = settings[`${kind}Sensitivity`];
     }
   }
@@ -152,6 +158,7 @@
     const move = event => {
       const rect = plot.getBoundingClientRect();
       settings[name] = Math.round(Math.max(limits[name][0], Math.min(limits[name][1], hzAt((event.clientX - rect.left) / rect.width))));
+      settings[`${kind}Level`] = Math.round(Math.max(-95, Math.min(-5, -(event.clientY - rect.top) / rect.height * 100)));
       changed();
     };
     point.addEventListener('pointerdown', event => {
@@ -169,15 +176,23 @@
     point.addEventListener('lostpointercapture', end);
     point.addEventListener('keydown', event => {
       let next;
-      if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next = settings[name] * 1.05;
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') next = settings[name] / 1.05;
+      if (event.key === 'ArrowRight') next = settings[name] * 1.05;
+      if (event.key === 'ArrowLeft') next = settings[name] / 1.05;
       if (event.key === 'Home') next = limits[name][0];
       if (event.key === 'End') next = limits[name][1];
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        settings[`${kind}Level`] = Math.max(-95, Math.min(-5, settings[`${kind}Level`] + (event.key === 'ArrowUp' ? 2 : -2)));
+        changed(); persist(); return;
+      }
       if (next === undefined) return;
       event.preventDefault();
       settings[name] = Math.round(Math.max(limits[name][0], Math.min(limits[name][1], next)));
       changed(); persist();
     });
+    const tolerance = document.getElementById(`${kind}Tolerance`);
+    tolerance.addEventListener("input", () => { settings[`${kind}Tolerance`] = Number(tolerance.value); changed(); });
+    tolerance.addEventListener("change", persist);
     const sensitivity = document.getElementById(`${kind}Sensitivity`);
     sensitivity.addEventListener('input', () => { settings[`${kind}Sensitivity`] = Number(sensitivity.value); changed(); });
     sensitivity.addEventListener('change', persist);
@@ -202,33 +217,40 @@
   let lastRow = 0;
   window.sinestesiaSpectrumFrame = (spectrum, sampleRate, now) => {
     if (panel.hidden || now - lastRow < 40) return;
-    const elapsed = Math.min(120, lastRow ? now - lastRow : 40);
     lastRow = now;
-    const width = Math.max(1, Math.min(900, Math.round(plot.clientWidth)));
-    if (surface.width !== width || surface.height !== 210) { surface.width = width; surface.height = 210; }
-    // Roughly six seconds of history. Color intensity is logarithmic dB.
-    const rows = Math.max(1, Math.round(elapsed * surface.height / 6000));
-    context.drawImage(surface, 0, 0, width, surface.height - rows, 0, rows, width, surface.height - rows);
-    const row = context.createImageData(width, rows);
+    const width = Math.max(1, Math.min(1400, Math.round(plot.clientWidth * Math.min(devicePixelRatio || 1, 2))));
+    const height = 420;
+    if (surface.width !== width || surface.height !== height) { surface.width = width; surface.height = height; }
+    context.fillStyle = '#04070e'; context.fillRect(0, 0, width, height);
+    context.strokeStyle = '#ffffff12'; context.lineWidth = 1;
+    for (let db = -10; db > -100; db -= 10) { const y = -db / 100 * height; context.beginPath(); context.moveTo(0,y); context.lineTo(width,y); context.stroke(); }
+    const gradient = context.createLinearGradient(0, height, 0, 0);
+    gradient.addColorStop(0, '#1946aa'); gradient.addColorStop(0.5, '#24e5d0'); gradient.addColorStop(1, '#ffe3fa');
+    context.strokeStyle = gradient; context.lineWidth = Math.max(1, width / 700);
     const binHz = sampleRate / (spectrum.length * 2);
+    context.beginPath();
     for (let x = 0; x < width; x++) {
       const lo = Math.max(1, Math.floor(hzAt(x / width) / binHz));
       const hi = Math.min(spectrum.length - 1, Math.ceil(hzAt((x + 1) / width) / binHz));
       let db = -100;
       for (let i = lo; i <= hi; i++) db = Math.max(db, spectrum[i]);
-      const value = Math.max(0, Math.min(1, (db + 95) / 75));
-      for (let y = 0; y < rows; y++) {
-        const offset = (y * width + x) * 4;
-        row.data[offset] = Math.round(255 * Math.pow(value, 2));
-        row.data[offset + 1] = Math.round(220 * Math.pow(value, 1.2));
-        row.data[offset + 2] = Math.round(255 * Math.min(1, value * 2));
-        row.data[offset + 3] = 255;
-      }
+      const y = Math.max(0, Math.min(height, -db / 100 * height));
+      context.moveTo(x, height); context.lineTo(x, y);
     }
-    context.putImageData(row, 0, 0);
-    statusElement.textContent = 'En vivo · K: kick / expansión · S: snare / aurora · M: notas / mini pulsos. Brillo = energía de la frecuencia.';
+    context.stroke();
+    statusElement.textContent = 'En vivo · X: 20 Hz–16 kHz · Y: −100 a 0 dBFS · solo se aceptan picos dentro de cada zona.';
   };
   updateUI();
   widthControl.value = settings.melodyWidth;
   document.getElementById('melodyWidthLabel').textContent = `${settings.melodyWidth} octavas`;
+})();
+
+(() => {
+  const player = document.getElementById('audio');
+  const speed = document.getElementById('playbackSpeed');
+  const label = document.getElementById('playbackSpeedValue');
+  const apply = () => { player.preservesPitch = true; player.playbackRate = Number(speed.value); label.textContent = `${Number(speed.value).toFixed(2)}×`; };
+  speed.addEventListener('input', apply);
+  player.addEventListener('loadedmetadata', apply);
+  apply();
 })();

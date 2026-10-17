@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <title>Sinestesia Visualizer</title>
-  <link rel="stylesheet" href="styles.css?v=20261017-constellation2" />
-  <link rel="stylesheet" href="controls.css?v=20261017-constellation2" />
+  <link rel="stylesheet" href="styles.css?v=20261017-xy1" />
+  <link rel="stylesheet" href="controls.css?v=20261017-xy1" />
 </head>
 <body>
   <main class="app">
@@ -19,6 +19,8 @@
         <label>Estilo <select id="visualMode"><option value="plasma" selected>Plasma · Ritmo + Melodía</option></select></label>
         <label>Intensidad <input id="fluidIntensity" type="range" min="0.7" max="2" step="0.05" value="1.35" /></label>
         <label hidden style="display:none">Velocidad del flujo <input id="colorSpeed" type="range" min="0.2" max="4" step="0.1" value="1.6" /></label>
+        <label>Velocidad <input id="playbackSpeed" type="range" min="0.5" max="1.25" step="0.05" value="1" /><output id="playbackSpeedValue">1.00×</output></label>
+        <small id="bpmValue">BPM aprox. · esperando golpes regulares</small>
         <small id="visualNotice" role="status"></small>
         <a class="spectrum-shortcut" href="#spectrumEditor">⚙ Configurar espectrograma · K / S / M</a>
       </div>
@@ -66,12 +68,13 @@
       </div>
 
       <section id="spectrumEditor" class="spectrum-card" aria-label="Ajustar detección por frecuencia">
-        <h2 class="spectrum-title">Espectrograma · Ajustar efectos</h2>
+        <h2 class="spectrum-title">Analizador XY · Ajustar efectos</h2>
         <button id="spectrumToggle" class="spectrum-toggle" type="button" aria-expanded="true" aria-controls="spectrumPanel">Ocultar espectrograma</button>
         <div id="spectrumPanel">
-          <p class="spectrum-help">Arrastra los puntos a izquierda o derecha para elegir qué frecuencias escucha cada efecto. Arriba está el sonido más reciente; el historial baja.</p>
+          <p class="spectrum-help">X = frecuencia. Y = nivel en dBFS: arriba es más fuerte. Arrastra K, S o M en ambos ejes. Solo se aceptan ataques cuyo pico en la banda elegida esté dentro del rectángulo, entre sus límites mínimo y máximo; fuera se rechazan.</p>
           <div id="spectrumPlot" class="spectrum-plot">
-            <canvas id="spectrumCanvas" aria-label="Espectrograma en vivo: frecuencia horizontal, tiempo hacia abajo"></canvas>
+            <span class="db-label db-top">0 dB</span><span class="db-label db-mid">−50</span><span class="db-label db-bottom">−100</span>
+            <canvas id="spectrumCanvas" aria-label="Analizador en vivo: frecuencia horizontal y nivel en decibelios vertical"></canvas>
             <div id="kickBand" class="spectrum-band kick-band"></div>
             <div id="snareBand" class="spectrum-band snare-band"></div>
             <div id="melodyBand" class="spectrum-band melody-band"></div>
@@ -83,11 +86,14 @@
           <p id="spectrumStatus" class="spectrum-help" role="status">Carga y reproduce música para ver sus frecuencias.</p>
           <div class="spectrum-settings">
             <label class="kick-setting"><strong id="kickRange">Kick</strong><span>Sensibilidad</span><input id="kickSensitivity" type="range" min="0.5" max="2" step="0.05" value="1" aria-label="Sensibilidad del kick" /></label>
+            <label class="kick-setting"><strong>Tolerancia Y · kick</strong><span>±dB <output id="kickToleranceValue">40</output></span><input id="kickTolerance" type="range" min="5" max="50" step="1" value="40" aria-label="Tolerancia de nivel para kick" /></label>
             <label class="snare-setting"><strong id="snareRange">Snare</strong><span>Sensibilidad</span><input id="snareSensitivity" type="range" min="0.5" max="2" step="0.05" value="1" aria-label="Sensibilidad del snare" /></label>
+            <label class="snare-setting"><strong>Tolerancia Y · snare</strong><span>±dB <output id="snareToleranceValue">40</output></span><input id="snareTolerance" type="range" min="5" max="50" step="1" value="40" aria-label="Tolerancia de nivel para snare" /></label>
             <label class="melody-setting"><strong id="melodyRange">Melodía</strong><span>Sensibilidad</span><input id="melodySensitivity" type="range" min="0.5" max="2" step="0.05" value="1" aria-label="Sensibilidad de melodía" /></label>
+            <label class="melody-setting"><strong>Tolerancia Y · melodía</strong><span>±dB <output id="melodyToleranceValue">40</output></span><input id="melodyTolerance" type="range" min="5" max="50" step="1" value="40" aria-label="Tolerancia de nivel para melodía" /></label>
             <label class="melody-setting"><strong>Amplitud del rango melódico</strong><span id="melodyWidthLabel">2 octavas</span><input id="melodyWidth" type="range" min="0.5" max="4" step="0.25" value="2" aria-label="Anchura del rango melódico en octavas" /></label>
           </div>
-          <p class="spectrum-help">K = expansión del aro. S = aurora. M = constelación de notas dentro del aro; mueve M y ajusta la amplitud para elegir el rango. Busca ataques tonales de piano, sintetizadores u otros instrumentos; no identifica el instrumento con certeza. El snare combina el cuerpo elegido con ataque en 2–6 kHz. Aumenta sensibilidad si pierde golpes; bájala si responde de más. También puedes mover los puntos con las flechas del teclado.</p>
+          <p class="spectrum-help">K = expansión del aro. S = aurora. M = constelación de notas dentro del aro; mueve M y ajusta la amplitud para elegir el rango. Busca ataques tonales de piano, sintetizadores u otros instrumentos; no identifica el instrumento con certeza. El snare combina el cuerpo elegido con ataque en 2–6 kHz. Aumenta sensibilidad si pierde golpes; bájala si responde de más. Flechas izquierda/derecha: frecuencia. Arriba/abajo: nivel. Ajusta la tolerancia Y para estrechar la ventana de volumen. BPM es una estimación y puede indicar la mitad o el doble del tempo.</p>
           <button id="spectrumReset" type="button" class="spectrum-reset">Restaurar detección</button>
         </div>
       </section>
@@ -109,11 +115,11 @@
     <audio id="audio" preload="metadata"></audio>
   </main>
 
-  <script src="app.js?v=20261017-constellation2"></script>
-  <script src="plasma-visualizer.js?v=20261017-constellation2"></script>
-  <script src="plasma-ultra-tuning.js?v=20261017-constellation2"></script>
-  <script src="visual-intensity.js?v=20261017-constellation2"></script>
-  <script src="plasma-webgl.js?v=20261017-constellation2"></script>
-  <script src="controls.js?v=20261017-constellation2"></script>
+  <script src="app.js?v=20261017-xy1"></script>
+  <script src="plasma-visualizer.js?v=20261017-xy1"></script>
+  <script src="plasma-ultra-tuning.js?v=20261017-xy1"></script>
+  <script src="visual-intensity.js?v=20261017-xy1"></script>
+  <script src="plasma-webgl.js?v=20261017-xy1"></script>
+  <script src="controls.js?v=20261017-xy1"></script>
 </body>
 </html>
