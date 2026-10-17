@@ -286,10 +286,23 @@ class MelodyOnsetDetector {
                  * (0.6 + plasma * 0.7);
       float bloom = exp(-distanceToEdge * 100.0) * exterior;
       float outward = max(0.0, length(p) - contour - thickness);
-      float curtain = 0.025 + snare * (0.035 + 0.065 * fbm(vec2(a * 10.0, time * 3.0)));
-      float rays = pow(0.5 + 0.5 * sin(a * 65.0 + plasma * 7.0), 3.0);
-      float aurora = exterior * snare * exp(-outward / curtain)
-                   * (1.0 - smoothstep(curtain, curtain * 2.0, outward)) * (0.25 + rays);
+      // Charging-ring reference: smooth light shafts, layered halos and focused poles.
+      // The reach stays within the previous aurora envelope; the ring radius is unchanged.
+      float reach = 0.045 + snare * 0.060;
+      float pole = pow(abs(sin(a)), 10.0);
+      float shaftField = pow(0.5 + 0.5 * sin(a * 13.0 + time * 0.20 + flow * 0.5), 28.0);
+      float fineField = pow(0.5 + 0.5 * sin(a * 29.0 - time * 0.13), 64.0);
+      float fade = exp(-outward / (reach * (0.32 + pole * 0.75)))
+                 * (1.0 - smoothstep(reach, reach * 1.7, outward));
+      float softHalo = exp(-outward * 48.0) * 0.16;
+      float aurora = exterior * snare * (softHalo + fade * (shaftField * 0.9 + fineField * 0.25 + pole * 0.18));
+      float haloBand = exp(-abs(outward - 0.008 - 0.003 * sin(a * 3.0 - time * 0.4)) * 550.0);
+      float arcLight = pow(0.5 + 0.5 * sin(a * 2.0 + time * 0.25), 8.0);
+      float down = max(0.0, -p.y - contour - thickness);
+      float beamWidth = 0.0012 + down * 0.013;
+      float beamAxis = p.x + sin(down * 13.0 - time * 0.4) * 0.002;
+      float tail = exp(-abs(beamAxis) / beamWidth) * exp(-down * 20.0)
+                 * step(0.001, down) * (1.0 - smoothstep(0.11, 0.17, down)) * snare;
       vec3 color = edgeColor * (edge * (1.3 + pulse + snare) + bloom * (0.4 + pulse * 0.5));
       float strand = pow(0.5 + 0.5 * sin(distanceToEdge * 360.0 + flow * 8.0 - time * 1.3), 6.0);
       color += edgeColor * strand * edge * 0.8;
@@ -312,7 +325,10 @@ class MelodyOnsetDetector {
       float glossFold = pow(0.5 + 0.5 * sin(crease * 2.7 + z * 7.0 + time * 0.3 + 1.1), 8.0);
       color += vec3(0.72,0.96,1.0) * shellMask * coolReflection * (0.5 + glossFold) * 3.0;
       color += vec3(0.14,0.002,0.008) * shellMask * (1.0-sheet) * 0.24;
-      color += mix(edgeColor, vec3(1.0), 0.35) * aurora * 2.0;
+      vec3 auroraTint = mix(edgeColor, vec3(0.75,0.9,1.0), 0.30);
+      color += auroraTint * aurora * 2.2;
+      color += mix(edgeColor, vec3(1.0), 0.75) * haloBand * arcLight * exterior * snare * 0.85;
+      color += mix(palette(time * 0.025 + 0.08), vec3(0.80,0.93,1.0),0.55) * tail * 2.0;
       // Tonal notes illuminate moving stars and short lightning links inside the hollow ring.
       float melody = clamp(treble, 0.0, 1.0);
       float inside = 1.0 - smoothstep(contour - thickness - 0.012, contour - thickness - 0.005, length(p));
@@ -513,8 +529,8 @@ class MelodyOnsetDetector {
     if (signal.snare > 0.01) {
       ctx.strokeStyle = gradient;
       ctx.lineWidth = Math.max(1, height * 0.003);
-      for (let i = 0; i < 96; i++) {
-        const a = i / 96 * Math.PI * 2;
+      for (let i = 0; i < 24; i++) {
+        const a = i / 24 * Math.PI * 2;
         const reach = height * signal.snare * (0.025 + 0.04 * (0.5 + 0.5 * Math.sin(i * 13.7 + contourClock * 12)));
         ctx.globalAlpha = signal.snare * 0.7;
         const start = radius + height * (0.006 + level * 0.003);
