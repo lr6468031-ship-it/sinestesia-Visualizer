@@ -1,0 +1,6 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const {readFileSync}=require('node:fs');const {runInNewContext}=require('node:vm');
+const Motion=runInNewContext(readFileSync('plasma-webgl.js','utf8').split('(() => {')[0]+'\nConstellationMotion');
+const signal={kick:0,snare:0,melody:0,note:2};
+test('stars keep moving between notes, stay contained and close the loop',()=>{const m=new Motion();m.update(16,{...signal,melody:1},true);const first=[...m.points];for(let i=0;i<30;i++){m.update(16,signal,true);for(let j=0;j<7;j++)assert.ok(Math.hypot(m.points[j*2],m.points[j*2+1])<.22);assert.equal(m.points[0],m.points[14]);assert.equal(m.points[1],m.points[15]);}assert.notDeepEqual([...m.points],first);assert.ok(m.glow>.4);});
+test('rhythm changes pendulum speed and paused positions do not drift',()=>{const calm=new Motion(),beat=new Motion();for(let i=0;i<20;i++){calm.update(16,signal,true);beat.update(16,{...signal,kick:1},true);}assert.ok(beat.phase>calm.phase);const before=[...beat.points];beat.update(100,signal,false);assert.deepEqual([...beat.points],before);});
+test('seed changes are smoothed and reset clears note trails',()=>{const m=new Motion();m.update(16,{...signal,note:20,melody:1},true);assert.ok(m.seed>0&&m.seed<3);m.reset();assert.equal(m.glow,0);assert.equal(m.phase,0);});

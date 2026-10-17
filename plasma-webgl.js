@@ -152,6 +152,34 @@ class MelodyOnsetDetector {
   }
 }
 
+// Continuous pendulum motion, with smooth impulses from the detected rhythm.
+class ConstellationMotion {
+  constructor() { this.reset(); }
+  reset() { this.phase=0;this.seed=0;this.swing=0;this.velocity=0;this.previous=0;this.glow=0;this.points=new Float32Array(16); }
+  update(dt, signal, playing) {
+    const seconds=Math.max(0,Math.min(0.1,dt/1000));
+    if(!playing)return this.points;
+    const beat=Math.max(signal.kick,signal.snare,signal.melody);
+    const onset=Math.max(0,beat-this.previous);this.previous=beat;
+    this.velocity+=onset*2.5;
+    this.velocity+=(-this.swing*20-this.velocity*4.5)*seconds;
+    this.swing+=this.velocity*seconds;
+    this.phase+=seconds*(3.8+beat*2.0);
+    this.seed+=(signal.note-this.seed)*(1-Math.exp(-seconds/0.22));
+    this.glow=Math.max(signal.melody,this.glow*Math.exp(-seconds/0.8));
+    for(let i=0;i<8;i++){
+      const index=i%7,phase=this.phase+index*0.83;
+      const tilt=Math.sin(this.phase*0.75+index*0.6)*0.7+this.swing;
+      const radius=0.065+0.045*(0.5+0.5*Math.sin(index*2.3+this.seed*0.35));
+      const x=Math.sin(phase+this.seed*0.12)*radius;
+      const y=Math.sin(phase*1.27+index*1.8)*radius;
+      this.points[i*2]=(x*Math.cos(tilt)-y*Math.sin(tilt))*(1+beat*0.12);
+      this.points[i*2+1]=x*Math.sin(tilt)+y*Math.cos(tilt);
+    }
+    return this.points;
+  }
+}
+
 // WebGL plasma fallback for Sinestesia Visualizer.
 // Performance-tuned for mobile while preserving the electric organic look.
 (() => {
@@ -339,12 +367,13 @@ class MelodyOnsetDetector {
         vec2 star = starPoints[i];
         vec2 next = starPoints[i + 1];
         float sparkle = 0.6 + 0.4 * sin(index * 2.7 + energy * 13.0 + time * 2.0);
-        float dotGlow = exp(-length(p - star) * 450.0);
+        float depth = 0.5 + 0.5 * sin(index * 1.7 + time * 4.0);
+        float dotGlow = exp(-length(p - star) * (350.0 + depth * 230.0));
         vec2 normal = normalize(vec2(-(next - star).y, (next - star).x));
         vec2 joint = mix(star, next, 0.48) + normal * sin(index * 7.0 + time * 18.0) * 0.009 * melody;
         float bolt = min(segmentDistance(p, star, joint), segmentDistance(p, joint, next));
         float form = smoothstep(0.0, 0.22, 1.0 - melody);
-        float link = exp(-bolt * 1000.0) * form * (0.15 + melody * 0.5);
+        float link = exp(-bolt * 1000.0) * (0.25 + form * 0.75) * (0.15 + melody * 0.5) * (0.6 + depth * 0.4);
         vec3 tint = mix(palette(index / 7.0 + time * 0.025), vec3(0.7, 1.0, 0.9), 0.65);
         stars += tint * (dotGlow * (1.5 + sparkle) + link) * melody;
       }
@@ -450,6 +479,7 @@ class MelodyOnsetDetector {
   const snareDetector = new SnareOnsetDetector();
   const melodyDetector = new MelodyOnsetDetector();
   const tempo = new BeatTempoEstimator();
+  const constellation = new ConstellationMotion();
   let melodySeed = 0;
   let melodyPulse = 0;
   let snarePulse = 0;
@@ -461,6 +491,7 @@ class MelodyOnsetDetector {
     snareDetector.reset();
     melodyDetector.reset();
     tempo.reset();
+    constellation.reset();
     melodyPulse = 0;
     snarePulse = 0;
     pulse = 0;
@@ -507,7 +538,8 @@ class MelodyOnsetDetector {
     visualLast = now;
     visualKick += (signal.kick - visualKick) * (1 - Math.exp(-dt / 32));
     visualSnare += (signal.snare - visualSnare) * (1 - Math.exp(-dt / 22));
-    return { ...signal, kick: visualKick, snare: visualSnare };
+    constellation.update(dt,signal,!audio.paused);
+    return { ...signal, kick: visualKick, snare: visualSnare, melody: Math.max(signal.melody,constellation.glow), points: constellation.points };
   }
 
   function drawKickFallback(width, height) {
@@ -544,11 +576,7 @@ class MelodyOnsetDetector {
       ctx.save();
       ctx.beginPath(); ctx.arc(width / 2, height * 0.43, radius - height * 0.015, 0, Math.PI * 2); ctx.clip();
       ctx.globalAlpha = signal.melody;
-      const stars = Array.from({ length: 7 }, (_, i) => {
-        const angle = i * 2.39996 + Math.sin(contourClock * 0.35 + i) * 0.18 + signal.note * 1.8;
-        const orbit = radius * (0.22 + 0.36 * (0.5 + 0.5 * Math.sin(i * 8.7 + signal.note * 3.0)));
-        return { x: width / 2 + Math.cos(angle) * orbit, y: height * 0.43 + Math.sin(angle) * orbit };
-      });
+      const stars = Array.from({length:7},(_,i)=>({x:width/2+signal.points[i*2]*height,y:height*0.43-signal.points[i*2+1]*height}));
       ctx.strokeStyle = `hsl(${(contourClock * 4 + signal.note * 30) % 360} 85% 80%)`; ctx.lineWidth = 1;
       stars.forEach((star, i) => {
         const next = stars[(i + 1) % stars.length];
@@ -623,16 +651,7 @@ class MelodyOnsetDetector {
     gl.uniform1f(locations.mid, signal.mid);
     gl.uniform1f(locations.treble, signal.treble);
     gl.uniform1f(locations.energy, signal.energy);
-    const points = new Float32Array(16);
-    for (let i = 0; i < 8; i++) {
-      const index = i % 7;
-      const t = contourClock * getColorSpeed() * 0.5;
-      const angle = index * 2.39996 + Math.sin(t * 0.9 + index + signal.energy) * 0.45 + signal.energy * 1.8;
-      const orbit = (0.055 + 0.12 * (0.5 + 0.5 * Math.sin(index * 8.7 + signal.energy * 3.0))) * (0.65 + 0.35 * (1 - signal.treble));
-      points[i * 2] = Math.cos(angle) * orbit + Math.sin(t * 0.6 + index * 2) * 0.014;
-      points[i * 2 + 1] = Math.sin(angle) * orbit + Math.cos(t * 0.5 + index) * 0.014;
-    }
-    gl.uniform2fv(locations.stars, points);
+    gl.uniform2fv(locations.stars, percussion.points);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   };
 
