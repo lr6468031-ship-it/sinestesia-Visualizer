@@ -16,6 +16,12 @@ on:
       - 'plasma-webgpu.js'
       - 'controls.css'
       - 'controls.js'
+      - 'separation*'
+      - 'scripts/**'
+      - 'vendor/**'
+      - 'package-lock.json'
+      - 'package.json'
+      - 'THIRD_PARTY.md'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
@@ -38,14 +44,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare site
-        run: |
-          rm -rf site
-          mkdir -p site
-          cp index.html app.js styles.css bass-wave.js plasma-visualizer.js plasma-ultra-tuning.js fluid-visualizer.js visual-intensity.js plasma-webgl.js plasma-webgpu.js controls.css controls.js site/
-          touch site/.nojekyll
-          echo "Web preview assets:"
-          ls -lh site
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Prepare site and verified AI model
+        run: npm run build:web -- --outdir site
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

@@ -236,3 +236,13 @@
 .db-top { top: 3px; }.db-mid { top: 49%; }.db-bottom { bottom: 3px; }
 #bpmValue { color: #b4f8d6; font-size: 12px; }
 .kick-band { border-color: #ff38b480; }.snare-band { border-color: #38eaff80; }.melody-band { border-color: #72ffc380; }
+.separation-options, .separation-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.separation-options label { display: flex; flex-direction: column; gap: 6px; color: #d0c9df; font-size: 12px; }
+.separation-options input, .separation-options select, .separator-card button { background: #211a30; border: 1px solid #5c4872; border-radius: 9px; color: #f4eaff; padding: 10px; min-height: 42px; }
+.separation-options input { width: 100px; }
+.separator-card button { cursor: pointer; }.separator-card button:disabled { opacity: .4; cursor: default; }
+.separator-card a { color: #96e9ff; }
+#separateProgress { width: 100%; accent-color: #98ffcb; }
+.stem-row { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #ffffff18; font-size: 12px; }
+.stem-row strong { overflow-wrap: anywhere; }
+#separateOriginal[hidden], #separateProgress[hidden] { display: none; }

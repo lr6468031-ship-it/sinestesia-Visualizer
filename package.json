@@ -4,13 +4,17 @@
   "private": true,
   "scripts": {
     "android:add": "cap add android",
-    "android:sync": "cap sync android"
+    "android:sync": "cap sync android",
+    "build:web": "node scripts/build-web.mjs",
+    "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
     "@capacitor/core": "^7.0.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "^7.0.0"
+    "@capacitor/cli": "^7.0.0",
+    "esbuild": "0.25.10",
+    "onnxruntime-web": "1.23.0"
   }
 }

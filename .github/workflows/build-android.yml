@@ -16,6 +16,11 @@ on:
       - 'styles.css'
       - 'controls.css'
       - 'controls.js'
+      - 'separation*'
+      - 'scripts/**'
+      - 'vendor/**'
+      - 'package-lock.json'
+      - 'THIRD_PARTY.md'
       - 'package.json'
       - 'capacitor.config.json'
       - '.github/workflows/build-android.yml'
@@ -52,15 +57,10 @@ jobs:
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Prepare web assets
-        run: |
-          rm -rf www
-          mkdir -p www
-          cp index.html app.js styles.css bass-wave.js plasma-visualizer.js plasma-ultra-tuning.js fluid-visualizer.js visual-intensity.js plasma-webgl.js plasma-webgpu.js controls.css controls.js www/
-          echo "Packaged assets:"
-          ls -lh www
+      - name: Prepare web assets and verified AI model
+        run: npm run build:web -- --outdir www
 
       - name: Create Android project
         run: npx cap add android
