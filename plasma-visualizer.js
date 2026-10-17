@@ -11,8 +11,8 @@ const originalEnsureAudioGraph = ensureAudioGraph;
 ensureAudioGraph = function ensureFastAudioGraph() {
   const ok = originalEnsureAudioGraph();
   if (!ok || !analyser) return ok;
-  if (analyser.fftSize !== 512) {
-    analyser.fftSize = 512;
+  if (analyser.fftSize !== 4096) {
+    analyser.fftSize = 4096;
     frequencyData = new Uint8Array(analyser.frequencyBinCount);
     timeData = new Uint8Array(analyser.fftSize);
   }
@@ -43,6 +43,21 @@ function getColorSpeed() {
   return Number.isFinite(value) ? Math.max(0.2, Math.min(4, value)) : 1.6;
 }
 
+// Separate FFT bins at the band boundaries; retain narrow musical notes as well as broadband energy.
+function reactiveBandLevel(minHz, maxHz) {
+  const binHz = audioContext.sampleRate / analyser.fftSize;
+  const start = Math.max(1, Math.ceil(minHz / binHz));
+  const end = Math.min(frequencyData.length, Math.ceil(maxHz / binHz));
+  let squares = 0, peak = 0;
+  for (let i = start; i < end; i += 1) {
+    const value = frequencyData[i] / 255;
+    squares += value * value;
+    peak = Math.max(peak, value);
+  }
+  const level = Math.sqrt(squares / Math.max(1, end - start)) * 0.65 + peak * 0.35;
+  return clamp((level - 0.025) / 0.70);
+}
+
 function fastBeatSignal() {
   if (!analyser || !frequencyData || audio.paused) {
     fastReactiveEnergy *= 0.55;
@@ -50,13 +65,14 @@ function fastBeatSignal() {
     smoothMid *= 0.62;
     smoothTreble *= 0.62;
     kickPunch *= 0.45;
+    previousKickInput = 0;
     return { bass: smoothBass, mid: smoothMid, treble: smoothTreble, energy: fastReactiveEnergy, kick: kickPunch };
   }
 
-  const bassNow = averageRange(28, 190);
-  const kickNow = averageRange(42, 125);
-  const midNow = averageRange(190, 2800);
-  const trebleNow = averageRange(2800, 12500);
+  const bassNow = reactiveBandLevel(25, 250);
+  const kickNow = reactiveBandLevel(35, 125);
+  const midNow = reactiveBandLevel(250, 4000);
+  const trebleNow = reactiveBandLevel(4000, 16000);
   const rms = rmsLevel();
 
   smoothBass = followValue(smoothBass, bassNow, 0.93, 0.20);
@@ -360,9 +376,9 @@ function contourFrame(now) {
     bassValue.textContent = Math.round(smoothBass * 100);
     midValue.textContent = Math.round(smoothMid * 100);
     trebleValue.textContent = Math.round(smoothTreble * 100);
-    if (instrumentValue) instrumentValue.textContent = 'Plasma Ultra · Firme · Reactivo';
+    if (instrumentValue) instrumentValue.textContent = 'Fusión · Graves / Medios / Agudos';
     const notice = document.getElementById('visualNotice');
-    if (notice) notice.textContent = 'Plasma Ultra · 4 capas · Flamas · Pulso';
+    if (notice) notice.textContent = 'Magenta: graves · Cian: medios · Dorado: agudos';
   }
 
   animationFrame = requestAnimationFrame(contourFrame);

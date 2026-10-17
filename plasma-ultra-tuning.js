@@ -1,18 +1,116 @@
-// Plasma Ultra: thick, elongated, rounded multicolor plasma pulses. No circular halos/spots.
-function tunedRingPath(cx,cy,radius,signal,scale){return buildContourPath(cx,cy,radius*scale,signal);}
-function plasmaColorAtPhase(phase,alpha=1){const h=((phase%1)+1)%1;const stops=[[0,[240,247,255]],[.14,[132,72,255]],[.30,[67,126,255]],[.46,[48,246,177]],[.62,[255,226,61]],[.78,[255,78,184]],[.92,[116,51,255]],[1,[240,247,255]]];let a=stops[0],b=stops.at(-1);for(let i=0;i<stops.length-1;i++){if(h>=stops[i][0]&&h<=stops[i+1][0]){a=stops[i];b=stops[i+1];break;}}const t=(h-a[0])/Math.max(.0001,b[0]-a[0]),c=a[1].map((v,i)=>Math.round(v+(b[1][i]-v)*t));return `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;}
-function makePlasmaGradient(cx,cy,time,alpha=1){if(typeof ctx.createConicGradient!=='function')return plasmaColorAtPhase(time*.04,alpha);const g=ctx.createConicGradient(time*.025*TAU-.75,cx,cy);[[0,[240,247,255]],[.14,[132,72,255]],[.30,[67,126,255]],[.46,[48,246,177]],[.62,[255,226,61]],[.78,[255,78,184]],[.92,[116,51,255]],[1,[240,247,255]]].forEach(([p,c])=>g.addColorStop(p,`rgba(${c[0]},${c[1]},${c[2]},${alpha})`));return g;}
+// Fusion: a luminous plasma sphere with fluid folds, driven by three fixed frequency colors.
+const fusionBands = [
+  { key: 'bass', rgb: '255,55,165', phase: 0, folds: 3 },
+  { key: 'mid', rgb: '40,220,255', phase: 2.1, folds: 5 },
+  { key: 'treble', rgb: '255,195,60', phase: 4.2, folds: 11 },
+];
 
-drawLayeredRing=function(path,cx,cy,radius,signal,time){const e=Math.pow(clamp(signal.energy),.78),k=clamp(signal.kick||0);ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineJoin='round';ctx.lineCap='round';const p1=tunedRingPath(cx,cy,radius,signal,1.012),p2=tunedRingPath(cx,cy,radius,signal,.996);ctx.strokeStyle=makePlasmaGradient(cx,cy,time,1);ctx.lineWidth=radius*(.034+k*.006);ctx.shadowBlur=radius*(.055+e*.025);ctx.shadowColor='rgba(155,75,255,.75)';ctx.stroke(p1);ctx.strokeStyle=`rgba(255,255,255,${.90+e*.10})`;ctx.lineWidth=radius*(.012+k*.002);ctx.shadowBlur=radius*.025;ctx.shadowColor='white';ctx.stroke(p2);ctx.restore();};
+function fusionColor(band, alpha) {
+  return `rgba(${band.rgb},${clamp(alpha)})`;
+}
 
-drawFlameRay=function(cx,cy,radius,angle,length,width,phase,alpha,kickBoost=0){const r0=radius*.985;const longLength=Math.max(length,radius*(.25+kickBoost*.10));const r1=r0+longLength;const x0=cx+Math.cos(angle)*r0,y0=cy+Math.sin(angle)*r0,x1=cx+Math.cos(angle)*r1,y1=cy+Math.sin(angle)*r1;const thickness=width*(7.2+kickBoost*1.8);const grad=ctx.createLinearGradient(x0,y0,x1,y1);grad.addColorStop(0,plasmaColorAtPhase(phase,Math.min(1,alpha+.28)));grad.addColorStop(.30,plasmaColorAtPhase(phase,alpha*.86));grad.addColorStop(.72,plasmaColorAtPhase(phase,alpha*.38));grad.addColorStop(1,plasmaColorAtPhase(phase,0));ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle=grad;ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=thickness;ctx.shadowBlur=thickness*1.8;ctx.shadowColor=plasmaColorAtPhase(phase,.62);ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();ctx.restore();};
+function fusionSurface(angle, radius, signal, time) {
+  const bass = clamp(signal.bass), mid = clamp(signal.mid), high = clamp(signal.treble);
+  return radius * (1
+    + bass * 0.105 * Math.sin(angle * 3 + time * 0.9)
+    + mid * 0.065 * Math.sin(angle * 5 - time * 1.1)
+    + high * 0.024 * Math.sin(angle * 11 + time * 1.7));
+}
 
-drawFlameField=function(cx,cy,radius,signal,time){const e=clamp(signal.energy),k=clamp(signal.kick||0),phase=time*.035,count=14;for(let i=0;i<count;i++){const angle=i/count*TAU+.035*Math.sin(i*2.7),s=.5+.5*Math.sin(i*12.9898+2.37),s2=.5+.5*Math.sin(i*5.398+1.17);const length=radius*(.20+s*.12+e*.08+k*.10);const width=radius*(.036+s2*.020+e*.007+k*.012);const alpha=.27+e*.20+s*.13+k*.16;drawFlameRay(cx,cy,radius,angle,length,width,phase+i/count,alpha,k);}};
+function fusionContour(cx, cy, radius, signal, time) {
+  const path = new Path2D();
+  for (let i = 0; i <= 160; i += 1) {
+    const a = i / 160 * TAU;
+    const r = fusionSurface(a, radius, signal, time);
+    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+    if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
+  }
+  path.closePath();
+  return path;
+}
 
-drawAurora=function(width,height){const signal=fastBeatSignal(),cx=width*.5,cy=height*.43,minSide=Math.min(width,height),r=minSide*(.325+signal.bass*.004+(signal.kick||0)*.006),path=buildContourPath(cx,cy,r,signal);
- drawFlameField(cx,cy,r,signal,contourClock);
- drawLayeredRing(path,cx,cy,r,signal,contourClock);
- // Keep the travelling pulse, but remove drawHotSpots(): those were the visible circles.
- drawTravellingPulse(cx,cy,r*1.01,signal,contourClock);
- ctx.save();ctx.globalCompositeOperation='source-over';ctx.fillStyle='#000';ctx.fill(path);ctx.restore();
+function drawFusionBand(band, cx, cy, radius, signal, time) {
+  const level = clamp(signal[band.key]);
+  if (level < 0.003) return;
+  const angle = time * 0.27 + band.phase;
+  const x = cx + Math.cos(angle) * radius * 0.42;
+  const y = cy + Math.sin(angle) * radius * 0.36;
+  const glow = ctx.createRadialGradient(x, y, 0, x, y, radius * 1.25);
+  glow.addColorStop(0, fusionColor(band, level * 0.24));
+  glow.addColorStop(0.55, fusionColor(band, level * 0.08));
+  glow.addColorStop(1, fusionColor(band, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - radius * 1.5, cy - radius * 1.5, radius * 3, radius * 3);
+
+  // Curved luminous ribbons crossing the interior like a fluid spherical membrane.
+  for (let ribbon = 0; ribbon < 3; ribbon += 1) {
+    const path = new Path2D();
+    const turn = angle + ribbon * 0.68;
+    for (let i = 0; i <= 100; i += 1) {
+      const u = i / 100 * Math.PI;
+      const horizontal = Math.cos(u);
+      const envelope = Math.sin(u);
+      const fold = Math.sin(u * band.folds + time * 0.8 + band.phase + ribbon);
+      const px = horizontal * radius * 0.98;
+      const py = envelope * radius * (Math.sin(u * 2 + turn) * 0.42 + fold * level * 0.28);
+      const sx = cx + px * Math.cos(turn) - py * Math.sin(turn);
+      const sy = cy + px * Math.sin(turn) + py * Math.cos(turn);
+      if (i === 0) path.moveTo(sx, sy); else path.lineTo(sx, sy);
+    }
+    ctx.strokeStyle = fusionColor(band, level * (0.38 - ribbon * 0.07));
+    ctx.lineWidth = radius * (0.018 + level * 0.032);
+    ctx.shadowColor = fusionColor(band, level * 0.8);
+    ctx.shadowBlur = radius * 0.10;
+    ctx.stroke(path);
+    ctx.strokeStyle = fusionColor(band, level * 0.85);
+    ctx.lineWidth = radius * 0.005;
+    ctx.stroke(path);
+  }
+}
+
+drawAurora = function drawFusionSphere(width, height) {
+  const signal = fastBeatSignal();
+  const bass = clamp(signal.bass), kick = clamp(signal.kick);
+  const cx = width * 0.5, cy = height * 0.43;
+  const radius = Math.min(width, height) * (0.25 + bass * 0.045 + kick * 0.014);
+  const time = contourClock * getColorSpeed() * 0.5;
+  const outline = fusionContour(cx, cy, radius, signal, time);
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // A very faint resting outline; color only appears with its corresponding sound.
+  ctx.strokeStyle = 'rgba(115,125,155,0.12)';
+  ctx.lineWidth = 1;
+  ctx.stroke(outline);
+  ctx.save();
+  ctx.clip(outline);
+  ctx.globalCompositeOperation = 'lighter';
+  fusionBands.forEach(band => drawFusionBand(band, cx, cy, radius, signal, time));
+  ctx.restore();
+
+  ctx.globalCompositeOperation = 'lighter';
+  fusionBands.forEach(band => {
+    const level = clamp(signal[band.key]);
+    if (level < 0.003) return;
+    // Traveling arcs follow the same deformed sphere, without changing frequency colors.
+    const path = new Path2D();
+    const start = time * 0.32 + band.phase;
+    const length = 1.2 + level * 2.5;
+    for (let i = 0; i <= 90; i += 1) {
+      const a = start + i / 90 * length;
+      const r = fusionSurface(a, radius, signal, time);
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
+    }
+    ctx.shadowColor = fusionColor(band, level);
+    ctx.shadowBlur = radius * (0.06 + level * 0.07);
+    ctx.strokeStyle = fusionColor(band, level * 0.24);
+    ctx.lineWidth = radius * (0.045 + level * 0.035);
+    ctx.stroke(path);
+    ctx.strokeStyle = fusionColor(band, level * 0.95);
+    ctx.lineWidth = radius * (0.008 + level * 0.012);
+    ctx.stroke(path);
+  });
+  ctx.restore();
 };

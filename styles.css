@@ -210,3 +210,9 @@ audio { width: 100%; max-width: 100%; }
 .visual-options input { width: 110px; accent-color: #ba79f3; }
 #visualNotice:empty { display: none; }
 #visualNotice { color: #e8b578; max-width: 320px; }
+
+/* Fixed colors connect the frequency meters to the plasma sphere. */
+.meter-card > div:nth-child(1) { color: #ff37a5; border-color: #ff37a54d; }
+.meter-card > div:nth-child(2) { color: #28dcff; border-color: #28dcff4d; }
+.meter-card > div:nth-child(3) { color: #ffc33c; border-color: #ffc33c4d; }
+.meter-card span { opacity: .9; }
