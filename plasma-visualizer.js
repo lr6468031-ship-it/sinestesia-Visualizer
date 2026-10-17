@@ -377,7 +377,9 @@ function contourFrame(now) {
     bassValue.textContent = Math.round(kick.pulse * 100);
     midValue.textContent = kick.hz ? Math.round(kick.hz) : "—";
     trebleValue.textContent = Math.round((kick.snare || 0) * 100);
-    if (instrumentValue) instrumentValue.textContent = 'Kick + snare · detección de ataques';
+    const melodyActivity = document.getElementById('melodyActivity');
+    if (melodyActivity) melodyActivity.textContent = kick.melodyHz ? `Nota tonal aprox. ${Math.round(kick.melodyHz)} Hz · mini pulso ${Math.round(kick.melody * 100)}%` : 'Melodía · sin notas detectadas';
+    if (instrumentValue) instrumentValue.textContent = 'Kick + snare + notas · detección de ataques';
     const notice = document.getElementById('visualNotice');
     if (notice) {
       const bands = window.sinestesiaDetectionSettings || { kickHz: 60, snareHz: 200 };

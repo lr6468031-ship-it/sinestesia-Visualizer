@@ -221,3 +221,8 @@
 .spectrum-axis span:nth-child(2) { left: 24.1%; transform: translateX(-50%); }
 .spectrum-axis span:nth-child(3) { left: 58.5%; transform: translateX(-50%); }
 .spectrum-axis span:nth-child(4) { right: 0; }
+.melody-band { background: #72ffc31a; border-color: #72ffc360; }
+.melody-point { top: 82%; background: #83ffc6; }
+.snare-point { top: 52%; }
+.kick-point { top: 22%; }
+.melody-setting { color: #a0ffd5; accent-color: #83ffc6; }

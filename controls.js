@@ -107,8 +107,8 @@
   const surface = document.getElementById('spectrumCanvas');
   if (!toggle || !surface) return;
   const context = surface.getContext('2d');
-  const defaults = { kickHz: 60, snareHz: 200, kickSensitivity: 1, snareSensitivity: 1 };
-  const limits = { kickHz: [30, 300], snareHz: [100, 1500], kickSensitivity: [0.5, 2], snareSensitivity: [0.5, 2] };
+  const defaults = { kickHz: 60, snareHz: 200, kickSensitivity: 1, snareSensitivity: 1, melodyHz: 700, melodySensitivity: 1, melodyWidth: 2 };
+  const limits = { kickHz: [30, 300], snareHz: [100, 1500], kickSensitivity: [0.5, 2], snareSensitivity: [0.5, 2], melodyHz: [100, 8000], melodySensitivity: [0.5, 2], melodyWidth: [0.5, 4] };
   const key = 'sinestesia-detection-v1';
   const settings = { ...defaults };
   try {
@@ -122,25 +122,30 @@
   const hzAt = x => 20 * Math.pow(800, Math.max(0, Math.min(1, x)));
   const persist = () => { try { localStorage.setItem(key, JSON.stringify(settings)); } catch (_) {} };
   function updateUI() {
-    for (const kind of ['kick', 'snare']) {
+    for (const kind of ['kick', 'snare', 'melody']) {
       const hz = settings[`${kind}Hz`];
       const point = document.getElementById(`${kind}Point`);
-      const lo = hz * (kind === 'kick' ? 0.5 : 0.75), hi = hz * 1.5;
+      const factor = Math.pow(2, settings.melodyWidth / 2);
+      const lo = kind === 'melody' ? hz / factor : hz * (kind === 'kick' ? 0.5 : 0.75);
+      const hi = kind === 'melody' ? Math.min(16000, hz * factor) : hz * 1.5;
       point.style.left = `${fraction(hz) * 100}%`;
       point.setAttribute('aria-valuenow', Math.round(hz));
       point.setAttribute('aria-valuetext', `${Math.round(hz)} Hz, banda ${Math.round(lo)} a ${Math.round(hi)} Hz`);
       const band = document.getElementById(`${kind}Band`);
       band.style.left = `${fraction(lo) * 100}%`;
       band.style.width = `${(fraction(hi) - fraction(lo)) * 100}%`;
-      document.getElementById(`${kind}Range`).textContent = `${kind === 'kick' ? 'Kick' : 'Snare'} · ${Math.round(lo)}–${Math.round(hi)} Hz`;
+      document.getElementById(`${kind}Range`).textContent = `${kind === 'kick' ? 'Kick' : kind === 'snare' ? 'Snare' : 'Melodía'} · ${Math.round(lo)}–${Math.round(hi)} Hz`;
       document.getElementById(`${kind}Sensitivity`).value = settings[`${kind}Sensitivity`];
     }
   }
+  const widthControl = document.getElementById('melodyWidth');
   function changed() {
     updateUI();
+    widthControl.value = settings.melodyWidth;
+    document.getElementById('melodyWidthLabel').textContent = `${settings.melodyWidth} octavas`;
     window.dispatchEvent(new Event('sinestesia-detection-change'));
   }
-  for (const kind of ['kick', 'snare']) {
+  for (const kind of ['kick', 'snare', 'melody']) {
     const point = document.getElementById(`${kind}Point`);
     const name = `${kind}Hz`;
     let pointer = null;
@@ -177,6 +182,8 @@
     sensitivity.addEventListener('input', () => { settings[`${kind}Sensitivity`] = Number(sensitivity.value); changed(); });
     sensitivity.addEventListener('change', persist);
   }
+  widthControl.addEventListener('input', () => { settings.melodyWidth = Number(widthControl.value); changed(); });
+  widthControl.addEventListener('change', persist);
   document.getElementById('spectrumReset').addEventListener('click', () => { Object.assign(settings, defaults); changed(); persist(); });
   toggle.addEventListener('click', () => {
     panel.hidden = !panel.hidden;
@@ -219,7 +226,9 @@
       }
     }
     context.putImageData(row, 0, 0);
-    statusElement.textContent = 'En vivo · K: kick / expansión · S: snare / aurora. Brillo = energía de la frecuencia.';
+    statusElement.textContent = 'En vivo · K: kick / expansión · S: snare / aurora · M: notas / mini pulsos. Brillo = energía de la frecuencia.';
   };
   updateUI();
+  widthControl.value = settings.melodyWidth;
+  document.getElementById('melodyWidthLabel').textContent = `${settings.melodyWidth} octavas`;
 })();

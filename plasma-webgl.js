@@ -84,6 +84,42 @@ class SnareOnsetDetector {
   }
 }
 
+// Tonal spectral onsets: sparse harmonic peaks and positive flux, not instrument labels.
+class MelodyOnsetDetector {
+  constructor() { this.reset(); }
+  reset() {
+    this.previous = null; this.fluxMean = 0; this.lastTime = null;
+    this.started = null; this.lastHit = -Infinity; this.peakHz = 0;
+  }
+  update(spectrum, sampleRate, now, settings = {}) {
+    const center = Math.max(100, Math.min(8000, Number(settings.melodyHz) || 700));
+    const width = Math.max(0.5, Math.min(4, Number(settings.melodyWidth) || 2));
+    const sensitivity = Math.max(0.5, Math.min(2, Number(settings.melodySensitivity) || 1));
+    const binHz = sampleRate / (spectrum.length * 2);
+    const lo = center / Math.pow(2, width / 2), hi = Math.min(sampleRate / 2, center * Math.pow(2, width / 2));
+    if (!this.previous || this.previous.length !== spectrum.length) this.previous = new Float32Array(spectrum.length);
+    let sum = 0, logSum = 0, peak = 0, peakHz = 0, flux = 0, count = 0;
+    for (let i = Math.max(1, Math.ceil(lo / binHz)); i < spectrum.length && i * binHz <= hi; i++) {
+      const power = Math.pow(10, spectrum[i] / 10);
+      sum += power; logSum += Math.log(Math.max(1e-12, power)); count++;
+      flux += Math.max(0, power - this.previous[i]);
+      if (power > peak) { peak = power; peakHz = i * binHz; }
+      this.previous[i] = power;
+    }
+    const mean = sum / Math.max(1, count);
+    const flatness = Math.exp(logSum / Math.max(1, count)) / Math.max(1e-12, mean);
+    const tonal = flatness < 0.35 && peak > mean * 5;
+    if (this.started === null) this.started = now;
+    const dt = this.lastTime === null ? 24 : Math.max(1, Math.min(100, now - this.lastTime));
+    const hit = now - this.started >= 100 && now - this.lastHit >= 95 && tonal
+      && peak > 1e-6 / sensitivity && flux > Math.max(3e-7 / sensitivity, this.fluxMean * (1 + 1.5 / sensitivity), sum * 0.12 / sensitivity);
+    if (hit) { this.lastHit = now; this.peakHz = peakHz; }
+    this.fluxMean += (flux - this.fluxMean) * (1 - Math.exp(-dt / 450));
+    this.lastTime = now;
+    return hit ? Math.min(1, 0.4 + flux / Math.max(sum, 1e-12) * 0.6) : 0;
+  }
+}
+
 // WebGL plasma fallback for Sinestesia Visualizer.
 // Performance-tuned for mobile while preserving the electric organic look.
 (() => {
@@ -212,6 +248,12 @@ class SnareOnsetDetector {
       vec3 color = edgeColor * (edge * (1.3 + pulse + snare) + bloom * (0.4 + pulse * 0.5));
       color += vec3(1.0) * core * edge * (1.15 + pulse + snare * 1.5);
       color += mix(edgeColor, vec3(1.0), 0.35) * aurora * 2.0;
+      // Small pearl-like pulses hug the outside of the ring; no light fills its center.
+      float melody = clamp(treble, 0.0, 1.0);
+      float pearls = pow(0.5 + 0.5 * cos(a * 12.0 + energy * 6.2831853), 18.0);
+      float miniDistance = abs(length(p) - contour - thickness - 0.009 - melody * 0.009);
+      float miniPulse = exp(-miniDistance * 420.0) * pearls * melody * exterior;
+      color += mix(edgeColor, vec3(0.65, 1.0, 0.88), 0.7) * miniPulse * 3.0;
       color = vec3(1.0) - exp(-color * 1.35);
       gl_FragColor = vec4(color,1.0);
     }
@@ -309,6 +351,8 @@ class SnareOnsetDetector {
   let kickSpectrum = null;
   const kickDetector = new KickOnsetDetector();
   const snareDetector = new SnareOnsetDetector();
+  const melodyDetector = new MelodyOnsetDetector();
+  let melodyPulse = 0;
   let snarePulse = 0;
   let lastPulseFrame = 0;
   let pulse = 0;
@@ -316,6 +360,8 @@ class SnareOnsetDetector {
   function resetKick() {
     kickDetector.reset();
     snareDetector.reset();
+    melodyDetector.reset();
+    melodyPulse = 0;
     snarePulse = 0;
     pulse = 0;
   }
@@ -330,6 +376,7 @@ class SnareOnsetDetector {
     lastPulseFrame = now;
     pulse *= Math.exp(-dt / 150);
     snarePulse *= Math.exp(-dt / 95);
+    melodyPulse *= Math.exp(-dt / 110);
     if (!audio.paused && source && audioContext) {
       if (!kickAnalyser) {
         // Independent, unsmoothed FFT: visual smoothing must not hide kick attacks.
@@ -345,10 +392,12 @@ class SnareOnsetDetector {
       if (hit) pulse = Math.max(pulse, hit);
       const snareHit = snareDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
       if (snareHit) snarePulse = Math.max(snarePulse, snareHit);
+      const melodyHit = melodyDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
+      if (melodyHit) melodyPulse = Math.max(melodyPulse, melodyHit);
     }
-    window.sinestesiaKickReadout = { pulse, snare: snarePulse, hz: pulse > 0.05 ? kickDetector.peakHz : 0, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
+    window.sinestesiaKickReadout = { pulse, snare: snarePulse, melody: melodyPulse, melodyHz: melodyPulse > 0.05 ? melodyDetector.peakHz : 0, hz: pulse > 0.05 ? kickDetector.peakHz : 0, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
     const gain = Number(document.getElementById('fluidIntensity').value) || 1.35;
-    return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35) };
+    return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35), melody: Math.min(1, melodyPulse * gain / 1.35), note: Math.min(1, melodyDetector.peakHz / 8000) };
   }
 
   function drawKickFallback(width, height) {
@@ -378,6 +427,18 @@ class SnareOnsetDetector {
         ctx.beginPath();
         ctx.moveTo(width / 2 + Math.cos(a) * start, height * 0.43 + Math.sin(a) * start);
         ctx.lineTo(width / 2 + Math.cos(a) * (start + reach), height * 0.43 + Math.sin(a) * (start + reach));
+        ctx.stroke();
+      }
+    }
+    if (signal.melody > 0.01) {
+      ctx.globalAlpha = signal.melody;
+      ctx.strokeStyle = '#baffdc';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 12; i++) {
+        const a = i / 12 * Math.PI * 2 - signal.note * Math.PI / 6;
+        const r = radius + height * (0.017 + level * 0.003 + signal.melody * 0.009);
+        ctx.beginPath();
+        ctx.arc(width / 2 + Math.cos(a) * r, height * 0.43 + Math.sin(a) * r, 1.5 + signal.melody * 2, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -432,7 +493,7 @@ class SnareOnsetDetector {
     }
 
     const percussion = readKickPulse();
-    const signal = { bass: percussion.kick, mid: percussion.snare, treble: 0, energy: 0 };
+    const signal = { bass: percussion.kick, mid: percussion.snare, treble: percussion.melody, energy: percussion.note };
     surface.style.filter = baseCanvas.style.filter;
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT);
