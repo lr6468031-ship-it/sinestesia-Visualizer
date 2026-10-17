@@ -180,6 +180,7 @@ class MelodyOnsetDetector {
     uniform float mid;
     uniform float treble;
     uniform float energy;
+    uniform vec2 starPoints[8];
 
     float hash(vec2 p) {
       p = fract(p * vec2(123.34, 456.21));
@@ -222,12 +223,6 @@ class MelodyOnsetDetector {
       return mix(magenta, deepBlue, (x - 0.76) / 0.24);
     }
 
-    vec2 starPoint(float i, float t, float note) {
-      float angle = i * 2.39996 + sin(t * 0.35 + i) * 0.18 + note * 1.8;
-      float orbit = 0.05 + 0.10 * hash(vec2(i, 3.7));
-      return vec2(cos(angle), sin(angle)) * orbit
-           + vec2(sin(t * 0.6 + i * 2.0), cos(t * 0.5 + i)) * 0.014;
-    }
     float segmentDistance(vec2 p, vec2 a, vec2 b) {
       vec2 ab = b - a;
       return length(p - a - ab * clamp(dot(p - a, ab) / max(dot(ab, ab), 0.00001), 0.0, 1.0));
@@ -263,10 +258,11 @@ class MelodyOnsetDetector {
       float melody = clamp(treble, 0.0, 1.0);
       float inside = 1.0 - smoothstep(contour - thickness - 0.012, contour - thickness - 0.005, length(p));
       vec3 stars = vec3(0.0);
+      if (melody > 0.003) {
       for (int i = 0; i < 7; i++) {
         float index = float(i);
-        vec2 star = starPoint(index, time, energy);
-        vec2 next = starPoint(mod(index + 1.0, 7.0), time, energy);
+        vec2 star = starPoints[i];
+        vec2 next = starPoints[i + 1];
         float sparkle = 0.6 + 0.4 * sin(index * 2.7 + energy * 13.0 + time * 2.0);
         float dotGlow = exp(-length(p - star) * 450.0);
         vec2 normal = normalize(vec2(-(next - star).y, (next - star).x));
@@ -275,6 +271,7 @@ class MelodyOnsetDetector {
         float link = exp(-bolt * 1000.0) * (0.15 + melody * 0.5);
         vec3 tint = mix(palette(index / 7.0), vec3(0.7, 1.0, 0.9), 0.65);
         stars += tint * (dotGlow * (1.5 + sparkle) + link) * melody;
+      }
       }
       color += stars * inside;
       color = vec3(1.0) - exp(-color * 1.35);
@@ -327,6 +324,7 @@ class MelodyOnsetDetector {
       mid: gl.getUniformLocation(program, 'mid'),
       treble: gl.getUniformLocation(program, 'treble'),
       energy: gl.getUniformLocation(program, 'energy'),
+      stars: gl.getUniformLocation(program, 'starPoints[0]'),
     };
 
     gl.clearColor(0, 0, 0, 1);
@@ -536,6 +534,16 @@ class MelodyOnsetDetector {
     gl.uniform1f(locations.mid, signal.mid);
     gl.uniform1f(locations.treble, signal.treble);
     gl.uniform1f(locations.energy, signal.energy);
+    const points = new Float32Array(16);
+    for (let i = 0; i < 8; i++) {
+      const index = i % 7;
+      const t = contourClock * getColorSpeed() * 0.5;
+      const angle = index * 2.39996 + Math.sin(t * 0.35 + index) * 0.18 + signal.energy * 1.8;
+      const orbit = 0.05 + 0.10 * (0.5 + 0.5 * Math.sin(index * 8.7));
+      points[i * 2] = Math.cos(angle) * orbit + Math.sin(t * 0.6 + index * 2) * 0.014;
+      points[i * 2 + 1] = Math.sin(angle) * orbit + Math.cos(t * 0.5 + index) * 0.014;
+    }
+    gl.uniform2fv(locations.stars, points);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   };
 
