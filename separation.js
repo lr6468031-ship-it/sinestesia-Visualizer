@@ -1,4 +1,4 @@
-import { encodeWav } from './separation-dsp.js?v=20261017-results1';
+import { encodeWav } from './separation-dsp.js?v=20261017-cpufix1';
 (() => {
   const input = document.getElementById('audioFile'), player = document.getElementById('audio');
   const start = document.getElementById('separateStart'), cancel = document.getElementById('separateCancel');
@@ -38,7 +38,7 @@ import { encodeWav } from './separation-dsp.js?v=20261017-results1';
       const channelData=[decoded.getChannelData(0).slice(begin,end),decoded.getChannelData(Math.min(1,decoded.numberOfChannels-1)).slice(begin,end)];
       if(!channelData[0].length)throw Error('El fragmento está vacío.');
       originalUrl=URL.createObjectURL(file);original.hidden=false;
-      worker=new Worker(new URL('./separator-assets/worker.js?v=results1',import.meta.url),{type:'module'});
+      worker=new Worker(new URL('./separator-assets/worker.js?v=cpufix1',import.meta.url),{type:'module'});
       worker.onerror=()=>{if(token===generation)stop('No se pudo iniciar la IA. Recarga la página o prueba un navegador actualizado.');};
       worker.onmessageerror=()=>{if(token===generation)stop('No se pudieron recibir las pistas. Prueba un fragmento de 15 segundos.');};
       worker.onmessage=async event=>{
@@ -46,7 +46,7 @@ import { encodeWav } from './separation-dsp.js?v=20261017-results1';
         const data=event.data;
         if(data.type==='status'){message.textContent=data.text;progress.removeAttribute('value');}
         if(data.type==='download'){progress.value=Math.min(1,data.loaded/data.total);message.textContent=`Descargando modelo IA: ${(data.loaded/1e6).toFixed(0)} / ${(data.total/1e6).toFixed(0)} MB. La canción sigue en tu dispositivo.`;}
-        if(data.type==='progress'){progress.value=data.step/data.total;message.textContent=`Separando fragmento de ${seconds.toFixed(1)} s · segmento ${data.step}/${data.total}. Puedes cancelar.`;}
+        if(data.type==='progress'){progress.value=data.step/data.total;message.textContent=`Separando fragmento de ${seconds.toFixed(1)} s · ${data.engine || 'IA'} · segmento ${data.step}/${data.total}. Puedes cancelar.`;}
         if(data.type==='error'){stop(`No se pudo separar: ${data.text} Prueba un fragmento más corto o un ordenador.`);return;}
         if(data.type==='done'){
           // Release the model before WAV encoding to avoid retaining its memory on phones.
@@ -86,7 +86,7 @@ import { encodeWav } from './separation-dsp.js?v=20261017-results1';
           }
         }
       };
-      worker.postMessage({type:'separate',channelData},channelData.map(c=>c.buffer));
+      worker.postMessage({type:'separate',channelData,engine:document.getElementById('separateEngine').value},channelData.map(c=>c.buffer));
     }catch(error){if(token===generation)stop(`No se pudo preparar el audio: ${error.message}`);}
   });
   window.addEventListener('beforeunload',()=>{worker?.terminate();release();});

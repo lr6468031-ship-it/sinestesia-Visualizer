@@ -1,5 +1,6 @@
 import * as ort from 'onnxruntime-web/webgpu';
 import { separateTracks } from './vendor/demucs/apply.js';
+import { chooseSeparationBackend, runSeparationWithFallback } from './separation-runtime.js';
 import { splitDrumBands } from './separation-dsp.js';
 ort.env.wasm.numThreads = 1; // Works on GitHub Pages without COOP/COEP headers.
 ort.env.wasm.proxy = false;
@@ -42,22 +43,23 @@ async function weights() {
 }
 self.onmessage = async event => {
   if (event.data.type !== 'separate') return;
-  let session;
   try {
     status('Cargando modelo IA (~174 MB, solo la primera vez)…');
     const modelBytes = await weights();
-    let gpu = false;
-    try { gpu = !!(await navigator.gpu?.requestAdapter()); } catch (_) {}
-    status(`Preparando IA en ${gpu ? 'GPU' : 'CPU'}. Puede tardar varios minutos…`);
-    try { session = await ort.InferenceSession.create(modelBytes, { executionProviders: gpu ? ['webgpu','wasm'] : ['wasm'], enableCpuMemArena: false, enableMemPattern: false }); }
-    catch (error) { if (!gpu) throw error; status('GPU no compatible. Preparando CPU…'); session = await ort.InferenceSession.create(modelBytes, { executionProviders:['wasm'] }); }
+    const backend = await chooseSeparationBackend(navigator.gpu, event.data.engine);
+    status(backend === 'webgpu' ? 'Preparando IA en GPU…' : 'Preparando IA en CPU compatible. No requiere los bloques grandes de WebGPU; puede tardar varios minutos…');
     const { channelData } = event.data;
-    const tracks = await separateTracks(new Model(session), { channelData, sampleRate:44100 }, (step,total) => postMessage({ type:'progress', step,total }));
+    const tracks = await runSeparationWithFallback({
+      backend,
+      createSession: provider => ort.InferenceSession.create(modelBytes, { executionProviders:[provider], enableCpuMemArena:false, enableMemPattern:false }),
+      onFallback: () => status('La GPU no pudo ejecutar el modelo. Reiniciando automáticamente en CPU compatible…'),
+      run: (session, provider) => separateTracks(new Model(session), { channelData, sampleRate:44100 }, (step,total) => postMessage({ type:'progress', step,total, engine:provider === 'wasm' ? 'CPU compatible' : 'GPU' })),
+    });
     status('Preparando pistas y bandas estimadas de batería…');
     const bands = splitDrumBands(tracks.drums.channelData, 44100);
     for (const [name, channelData] of Object.entries(bands)) tracks[name] = { channelData, sampleRate:44100 };
     const transfers = [...new Set(Object.values(tracks).flatMap(track => track.channelData.map(channel => channel.buffer)))];
     postMessage({ type:'done', tracks }, transfers);
   } catch (error) { postMessage({ type:'error', text: error?.message || String(error) }); }
-  finally { if (session) await session.release(); }
+
 };

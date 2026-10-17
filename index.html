@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <title>Sinestesia Visualizer</title>
-  <link rel="stylesheet" href="styles.css?v=20261017-chrome1" />
-  <link rel="stylesheet" href="controls.css?v=20261017-chrome1" />
+  <link rel="stylesheet" href="styles.css?v=20261017-charge1" />
+  <link rel="stylesheet" href="controls.css?v=20261017-charge1" />
 </head>
 <body>
   <main class="app">
@@ -103,6 +103,7 @@
         <h2 class="spectrum-title">Separar instrumentos · IA</h2>
         <p class="spectrum-help">Demucs separa voz, batería, bajo y resto melódico. La canción se procesa en tu dispositivo: no se sube. Descarga inicial del modelo: unos 174 MB. Empieza con un fragmento corto; en móvil puede tardar y usar mucha memoria.</p>
         <div class="separation-options">
+          <label>Motor IA <select id="separateEngine"><option value="auto">Automático · GPU o CPU</option><option value="cpu">CPU compatible · sin WebGPU</option></select></label>
           <label>Inicio · segundos <input id="separateFrom" type="number" min="0" step="1" value="0" /></label>
           <label>Fragmento <select id="separateDuration"><option value="15">15 segundos</option><option value="30" selected>30 segundos</option><option value="60">60 segundos</option><option value="full">Hasta 5 minutos</option></select></label>
         </div>
@@ -134,12 +135,12 @@
     <audio id="audio" preload="metadata"></audio>
   </main>
 
-  <script src="app.js?v=20261017-chrome1"></script>
-  <script src="plasma-visualizer.js?v=20261017-chrome1"></script>
-  <script src="plasma-ultra-tuning.js?v=20261017-chrome1"></script>
-  <script src="visual-intensity.js?v=20261017-chrome1"></script>
-  <script src="plasma-webgl.js?v=20261017-chrome1"></script>
-  <script src="controls.js?v=20261017-chrome1"></script>
-  <script type="module" src="separation.js?v=20261017-chrome1"></script>
+  <script src="app.js?v=20261017-charge1"></script>
+  <script src="plasma-visualizer.js?v=20261017-charge1"></script>
+  <script src="plasma-ultra-tuning.js?v=20261017-charge1"></script>
+  <script src="visual-intensity.js?v=20261017-charge1"></script>
+  <script src="plasma-webgl.js?v=20261017-charge1"></script>
+  <script src="controls.js?v=20261017-charge1"></script>
+  <script type="module" src="separation.js?v=20261017-charge1"></script>
 </body>
 </html>
