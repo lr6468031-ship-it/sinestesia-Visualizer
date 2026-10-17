@@ -64,6 +64,28 @@
         </section>
       </div>
 
+      <section class="spectrum-card" aria-label="Ajustar detección por frecuencia">
+        <button id="spectrumToggle" class="spectrum-toggle" type="button" aria-expanded="false" aria-controls="spectrumPanel">Mostrar espectrograma y ajustar detección</button>
+        <div id="spectrumPanel" hidden>
+          <p class="spectrum-help">Arrastra los puntos a izquierda o derecha para elegir qué frecuencias escucha cada efecto. Arriba está el sonido más reciente; el historial baja.</p>
+          <div id="spectrumPlot" class="spectrum-plot">
+            <canvas id="spectrumCanvas" aria-label="Espectrograma en vivo: frecuencia horizontal, tiempo hacia abajo"></canvas>
+            <div id="kickBand" class="spectrum-band kick-band"></div>
+            <div id="snareBand" class="spectrum-band snare-band"></div>
+            <button id="kickPoint" class="spectrum-point kick-point" type="button" role="slider" aria-label="Frecuencia central del kick" aria-valuemin="30" aria-valuemax="300" aria-valuenow="60">K</button>
+            <button id="snarePoint" class="spectrum-point snare-point" type="button" role="slider" aria-label="Frecuencia del cuerpo del snare" aria-valuemin="100" aria-valuemax="1500" aria-valuenow="200">S</button>
+          </div>
+          <div class="spectrum-axis" aria-hidden="true"><span>20 Hz</span><span>100</span><span>1k</span><span>16k Hz</span></div>
+          <p id="spectrumStatus" class="spectrum-help" role="status">Carga y reproduce música para ver sus frecuencias.</p>
+          <div class="spectrum-settings">
+            <label class="kick-setting"><strong id="kickRange">Kick</strong><span>Sensibilidad</span><input id="kickSensitivity" type="range" min="0.5" max="2" step="0.05" value="1" aria-label="Sensibilidad del kick" /></label>
+            <label class="snare-setting"><strong id="snareRange">Snare</strong><span>Sensibilidad</span><input id="snareSensitivity" type="range" min="0.5" max="2" step="0.05" value="1" aria-label="Sensibilidad del snare" /></label>
+          </div>
+          <p class="spectrum-help">K = expansión del aro. S = aurora. El snare combina el cuerpo elegido con ataque en 2–6 kHz. Aumenta sensibilidad si pierde golpes; bájala si responde de más. También puedes mover los puntos con las flechas del teclado.</p>
+          <button id="spectrumReset" type="button" class="spectrum-reset">Restaurar detección</button>
+        </div>
+      </section>
+
       <div class="meter-card" aria-label="Niveles de frecuencia">
         <div><span>Pulso del kick</span><strong id="bassValue">0</strong></div>
         <div><span>Fundamental aprox. · Hz</span><strong id="midValue">0</strong></div>

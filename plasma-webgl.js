@@ -11,12 +11,14 @@ class KickOnsetDetector {
     this.started = null;
     this.lastHit = -Infinity;
   }
-  update(spectrum, sampleRate, now) {
+  update(spectrum, sampleRate, now, settings = {}) {
     const binHz = sampleRate / (spectrum.length * 2);
+    const center = Math.max(30, Math.min(300, Number(settings.kickHz) || 60));
+    const sensitivity = Math.max(0.5, Math.min(2, Number(settings.kickSensitivity) || 1));
     let body = 0, support = 0, peak = 0, peakHz = 0;
-    for (let i = Math.ceil(30 / binHz); i * binHz <= 160; i++) {
+    for (let i = Math.ceil(center * 0.5 / binHz); i * binHz <= center * (160 / 60) && i < spectrum.length; i++) {
       const power = Math.pow(10, spectrum[i] / 10);
-      if (i * binHz <= 90) {
+      if (i * binHz <= center * 1.5) {
         body += power;
         if (power > peak) { peak = power; peakHz = i * binHz; }
       }
@@ -28,8 +30,8 @@ class KickOnsetDetector {
     const dt = this.lastTime === null ? 24 : Math.max(1, Math.min(100, now - this.lastTime));
     const flux = Math.max(0, energy - this.previous);
     const hit = now - this.started >= 100 && now - this.lastHit >= 170
-      && body > 1e-6 && energy > this.baseline * 1.65
-      && flux > Math.max(1e-6, this.fluxMean * 2.5, this.previous * 0.3);
+      && body > 1e-6 / sensitivity && energy > this.baseline * (1 + 0.65 / sensitivity)
+      && flux > Math.max(1e-6 / sensitivity, this.fluxMean * (1 + 1.5 / sensitivity), this.previous * 0.3 / sensitivity);
     const strength = hit ? Math.min(1, 0.55 + flux / Math.max(energy, 1e-6) * 0.45) : 0;
     if (hit) { this.lastHit = now; this.peakHz = peakHz; }
     this.baseline += (energy - this.baseline) * (1 - Math.exp(-dt / 450));
@@ -47,7 +49,7 @@ class SnareOnsetDetector {
     this.previous = 0; this.baseline = 0; this.fluxMean = 0;
     this.lastTime = null; this.started = null; this.lastHit = -Infinity;
   }
-  update(spectrum, sampleRate, now) {
+  update(spectrum, sampleRate, now, settings = {}) {
     const binHz = sampleRate / (spectrum.length * 2);
     const mean = (lo, hi) => {
       let sum = 0, count = 0;
@@ -56,7 +58,9 @@ class SnareOnsetDetector {
       }
       return sum / Math.max(1, count);
     };
-    const body = mean(150, 300), snap = mean(2000, 6000);
+    const center = Math.max(100, Math.min(1500, Number(settings.snareHz) || 200));
+    const sensitivity = Math.max(0.5, Math.min(2, Number(settings.snareSensitivity) || 1));
+    const body = mean(center * 0.75, center * 1.5), snap = mean(2000, 6000);
     const low = mean(30, 100), air = mean(8000, 14000);
     let occupied = 0, count = 0;
     for (let i = Math.ceil(2000 / binHz); i * binHz <= 6000 && i < spectrum.length; i++) {
@@ -68,10 +72,10 @@ class SnareOnsetDetector {
     const dt = this.lastTime === null ? 24 : Math.max(1, Math.min(100, now - this.lastTime));
     const flux = Math.max(0, energy - this.previous);
     const hit = now - this.started >= 100 && now - this.lastHit >= 140
-      && body > 1e-7 && snap > 1e-7 && snap > low * 0.08
+      && body > 1e-7 / sensitivity && snap > 1e-7 / sensitivity && snap > low * 0.08
       && body > air * 0.12 && occupied > count * 0.25
-      && energy > this.baseline * 1.8
-      && flux > Math.max(1e-7, this.fluxMean * 2.8, this.previous * 0.35);
+      && energy > this.baseline * (1 + 0.8 / sensitivity)
+      && flux > Math.max(1e-7 / sensitivity, this.fluxMean * (1 + 1.8 / sensitivity), this.previous * 0.35 / sensitivity);
     if (hit) this.lastHit = now;
     this.baseline += (energy - this.baseline) * (1 - Math.exp(-dt / 450));
     this.fluxMean += (flux - this.fluxMean) * (1 - Math.exp(-dt / 600));
@@ -315,6 +319,7 @@ class SnareOnsetDetector {
     snarePulse = 0;
     pulse = 0;
   }
+  window.addEventListener('sinestesia-detection-change', resetKick);
   audio.addEventListener('seeking', resetKick);
   audio.addEventListener('emptied', resetKick);
   audio.addEventListener('pause', resetKick);
@@ -335,9 +340,10 @@ class SnareOnsetDetector {
         kickSpectrum = new Float32Array(kickAnalyser.frequencyBinCount);
       }
       kickAnalyser.getFloatFrequencyData(kickSpectrum);
-      const hit = kickDetector.update(kickSpectrum, audioContext.sampleRate, now);
+      if (window.sinestesiaSpectrumFrame) window.sinestesiaSpectrumFrame(kickSpectrum, audioContext.sampleRate, now);
+      const hit = kickDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
       if (hit) pulse = Math.max(pulse, hit);
-      const snareHit = snareDetector.update(kickSpectrum, audioContext.sampleRate, now);
+      const snareHit = snareDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
       if (snareHit) snarePulse = Math.max(snarePulse, snareHit);
     }
     window.sinestesiaKickReadout = { pulse, snare: snarePulse, hz: pulse > 0.05 ? kickDetector.peakHz : 0, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };

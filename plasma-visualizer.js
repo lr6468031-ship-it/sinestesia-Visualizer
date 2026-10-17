@@ -379,7 +379,10 @@ function contourFrame(now) {
     trebleValue.textContent = Math.round((kick.snare || 0) * 100);
     if (instrumentValue) instrumentValue.textContent = 'Kick + snare · detección de ataques';
     const notice = document.getElementById('visualNotice');
-    if (notice) notice.textContent = 'Kick: graves · Snare: cuerpo 150–300 Hz + ataque 2–6 kHz';
+    if (notice) {
+      const bands = window.sinestesiaDetectionSettings || { kickHz: 60, snareHz: 200 };
+      notice.textContent = `Kick: ${Math.round(bands.kickHz)} Hz · Snare: ${Math.round(bands.snareHz)} Hz + ataque 2–6 kHz`;
+    }
   }
 
   animationFrame = requestAnimationFrame(contourFrame);

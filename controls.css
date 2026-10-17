@@ -194,3 +194,30 @@
     width: 100%;
   }
 }
+
+.spectrum-card { border: 1px solid #30303c; border-radius: 18px; padding: 14px; background: #090a10; min-width: 0; }
+.spectrum-toggle, .spectrum-reset { border: 1px solid #4c405c; border-radius: 10px; color: #eee; background: #20182c; padding: 12px; cursor: pointer; font: inherit; }
+.spectrum-toggle { width: 100%; text-align: left; }
+#spectrumPanel[hidden] { display: none; }
+.spectrum-help { color: #b7b3c3; font-size: 12px; line-height: 1.6; margin: 12px 0; }
+.spectrum-plot { position: relative; height: 210px; background: #03040a; overflow: hidden; border-radius: 10px; border: 1px solid #30303c; }
+#spectrumCanvas { display: block; width: 100%; height: 100%; }
+.spectrum-band { position: absolute; top: 0; bottom: 0; pointer-events: none; border-left: 1px solid; border-right: 1px solid; }
+.kick-band { background: #ff38b41a; border-color: #ff38b470; }
+.snare-band { background: #38eaff18; border-color: #38eaff70; }
+.spectrum-point { position: absolute; width: 44px; height: 44px; border-radius: 50%; transform: translate(-50%, -50%); font-size: 14px; font-weight: 800; touch-action: none; cursor: ew-resize; border: 2px solid #fff; color: #08080d; padding: 0; box-shadow: 0 0 14px #ffffff40; }
+.kick-point { top: 30%; background: #ff42af; }
+.snare-point { top: 70%; background: #47e8ff; }
+.spectrum-point:focus-visible { outline: 3px solid white; outline-offset: 4px; }
+.spectrum-axis { display: flex; justify-content: space-between; color: #9692a5; font-size: 10px; padding-top: 7px; }
+.spectrum-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.spectrum-settings label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; min-width: 0; }
+.spectrum-settings input { width: 100%; margin: 0; }
+.kick-setting { color: #ff7cc8; accent-color: #ff42af; }
+.snare-setting { color: #83f0ff; accent-color: #47e8ff; }
+.spectrum-axis { position: relative; display: block; height: 20px; }
+.spectrum-axis span { position: absolute; }
+.spectrum-axis span:nth-child(1) { left: 0; }
+.spectrum-axis span:nth-child(2) { left: 24.1%; transform: translateX(-50%); }
+.spectrum-axis span:nth-child(3) { left: 58.5%; transform: translateX(-50%); }
+.spectrum-axis span:nth-child(4) { right: 0; }

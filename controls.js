@@ -98,3 +98,128 @@
 
   setExpanded(false);
 })();
+
+// Live waterfall and direct control of the bands consumed by both onset detectors.
+(() => {
+  const toggle = document.getElementById('spectrumToggle');
+  const panel = document.getElementById('spectrumPanel');
+  const plot = document.getElementById('spectrumPlot');
+  const surface = document.getElementById('spectrumCanvas');
+  if (!toggle || !surface) return;
+  const context = surface.getContext('2d');
+  const defaults = { kickHz: 60, snareHz: 200, kickSensitivity: 1, snareSensitivity: 1 };
+  const limits = { kickHz: [30, 300], snareHz: [100, 1500], kickSensitivity: [0.5, 2], snareSensitivity: [0.5, 2] };
+  const key = 'sinestesia-detection-v1';
+  const settings = { ...defaults };
+  try {
+    const saved = JSON.parse(localStorage.getItem(key));
+    for (const name of Object.keys(defaults)) {
+      if (saved && Number.isFinite(saved[name])) settings[name] = Math.max(limits[name][0], Math.min(limits[name][1], saved[name]));
+    }
+  } catch (_) { /* Storage may be unavailable; in-memory controls still work. */ }
+  window.sinestesiaDetectionSettings = settings;
+  const fraction = hz => Math.max(0, Math.min(1, Math.log(hz / 20) / Math.log(800)));
+  const hzAt = x => 20 * Math.pow(800, Math.max(0, Math.min(1, x)));
+  const persist = () => { try { localStorage.setItem(key, JSON.stringify(settings)); } catch (_) {} };
+  function updateUI() {
+    for (const kind of ['kick', 'snare']) {
+      const hz = settings[`${kind}Hz`];
+      const point = document.getElementById(`${kind}Point`);
+      const lo = hz * (kind === 'kick' ? 0.5 : 0.75), hi = hz * 1.5;
+      point.style.left = `${fraction(hz) * 100}%`;
+      point.setAttribute('aria-valuenow', Math.round(hz));
+      point.setAttribute('aria-valuetext', `${Math.round(hz)} Hz, banda ${Math.round(lo)} a ${Math.round(hi)} Hz`);
+      const band = document.getElementById(`${kind}Band`);
+      band.style.left = `${fraction(lo) * 100}%`;
+      band.style.width = `${(fraction(hi) - fraction(lo)) * 100}%`;
+      document.getElementById(`${kind}Range`).textContent = `${kind === 'kick' ? 'Kick' : 'Snare'} · ${Math.round(lo)}–${Math.round(hi)} Hz`;
+      document.getElementById(`${kind}Sensitivity`).value = settings[`${kind}Sensitivity`];
+    }
+  }
+  function changed() {
+    updateUI();
+    window.dispatchEvent(new Event('sinestesia-detection-change'));
+  }
+  for (const kind of ['kick', 'snare']) {
+    const point = document.getElementById(`${kind}Point`);
+    const name = `${kind}Hz`;
+    let pointer = null;
+    const move = event => {
+      const rect = plot.getBoundingClientRect();
+      settings[name] = Math.round(Math.max(limits[name][0], Math.min(limits[name][1], hzAt((event.clientX - rect.left) / rect.width))));
+      changed();
+    };
+    point.addEventListener('pointerdown', event => {
+      if (pointer !== null) return;
+      event.preventDefault();
+      pointer = event.pointerId;
+      point.setPointerCapture(pointer);
+      point.focus({ preventScroll: true });
+      move(event);
+    });
+    point.addEventListener('pointermove', event => { if (event.pointerId === pointer) move(event); });
+    const end = event => { if (event.pointerId === pointer) { pointer = null; persist(); } };
+    point.addEventListener('pointerup', end);
+    point.addEventListener('pointercancel', end);
+    point.addEventListener('lostpointercapture', end);
+    point.addEventListener('keydown', event => {
+      let next;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next = settings[name] * 1.05;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') next = settings[name] / 1.05;
+      if (event.key === 'Home') next = limits[name][0];
+      if (event.key === 'End') next = limits[name][1];
+      if (next === undefined) return;
+      event.preventDefault();
+      settings[name] = Math.round(Math.max(limits[name][0], Math.min(limits[name][1], next)));
+      changed(); persist();
+    });
+    const sensitivity = document.getElementById(`${kind}Sensitivity`);
+    sensitivity.addEventListener('input', () => { settings[`${kind}Sensitivity`] = Number(sensitivity.value); changed(); });
+    sensitivity.addEventListener('change', persist);
+  }
+  document.getElementById('spectrumReset').addEventListener('click', () => { Object.assign(settings, defaults); changed(); persist(); });
+  toggle.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    toggle.setAttribute('aria-expanded', String(!panel.hidden));
+    toggle.textContent = panel.hidden ? 'Mostrar espectrograma y ajustar detección' : 'Ocultar espectrograma';
+  });
+  const audioElement = document.getElementById('audio');
+  const statusElement = document.getElementById('spectrumStatus');
+  audioElement.addEventListener('pause', () => { statusElement.textContent = 'En pausa · los ajustes siguen activos aunque ocultes el espectrograma.'; });
+  const clear = () => {
+    context.clearRect(0, 0, surface.width, surface.height);
+    statusElement.textContent = 'Carga y reproduce música para ver sus frecuencias.';
+  };
+  audioElement.addEventListener('emptied', clear);
+  audioElement.addEventListener('seeking', clear);
+  let lastRow = 0;
+  window.sinestesiaSpectrumFrame = (spectrum, sampleRate, now) => {
+    if (panel.hidden || now - lastRow < 40) return;
+    const elapsed = Math.min(120, lastRow ? now - lastRow : 40);
+    lastRow = now;
+    const width = Math.max(1, Math.min(900, Math.round(plot.clientWidth)));
+    if (surface.width !== width || surface.height !== 210) { surface.width = width; surface.height = 210; }
+    // Roughly six seconds of history. Color intensity is logarithmic dB.
+    const rows = Math.max(1, Math.round(elapsed * surface.height / 6000));
+    context.drawImage(surface, 0, 0, width, surface.height - rows, 0, rows, width, surface.height - rows);
+    const row = context.createImageData(width, rows);
+    const binHz = sampleRate / (spectrum.length * 2);
+    for (let x = 0; x < width; x++) {
+      const lo = Math.max(1, Math.floor(hzAt(x / width) / binHz));
+      const hi = Math.min(spectrum.length - 1, Math.ceil(hzAt((x + 1) / width) / binHz));
+      let db = -100;
+      for (let i = lo; i <= hi; i++) db = Math.max(db, spectrum[i]);
+      const value = Math.max(0, Math.min(1, (db + 95) / 75));
+      for (let y = 0; y < rows; y++) {
+        const offset = (y * width + x) * 4;
+        row.data[offset] = Math.round(255 * Math.pow(value, 2));
+        row.data[offset + 1] = Math.round(220 * Math.pow(value, 1.2));
+        row.data[offset + 2] = Math.round(255 * Math.min(1, value * 2));
+        row.data[offset + 3] = 255;
+      }
+    }
+    context.putImageData(row, 0, 0);
+    statusElement.textContent = 'En vivo · K: kick / expansión · S: snare / aurora. Brillo = energía de la frecuencia.';
+  };
+  updateUI();
+})();
