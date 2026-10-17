@@ -300,7 +300,8 @@ class MelodyFlowMotion {
       float flow = noise(direction * 2.7 + vec2(time * 0.23, -time * 0.17));
       float fold = sin(a * 3.0 + time * 0.75 + flow * 2.2);
       float contour = radius * (1.0 + (0.004 + pulse * 0.018) * fold
-        + treble * 0.018 * sin(a * 3.0 + melodyTime * 0.35)
+        + (treble * 0.018 + energy * 0.016) * sin(a * 3.0 + melodyTime * 0.35)
+        + energy * 0.008 * sin(a * 5.0 - melodyTime * 0.23)
         + 0.004 * sin(a * 2.0 - time * 0.53) + 0.002 * sin(a * 5.0 + time * 0.4));
       float distanceToEdge = abs(length(p) - contour);
       float snare = clamp(mid, 0.0, 1.0);
@@ -308,7 +309,7 @@ class MelodyFlowMotion {
       float thickness = 0.0015 + pow(ribbon, 2.0) * (0.003 + pulse * 0.003) + snare * 0.002;
       float edge = 1.0 - smoothstep(thickness, thickness + 0.002, distanceToEdge);
       float exterior = step(contour + thickness, length(p));
-      vec3 edgeColor = mix(vec3(0.025,0.12,1.0), vec3(0.65,0.035,1.0), ribbon);
+      vec3 edgeColor = palette(a / 6.2831853 + melodyTime * 0.018 + flow * 0.16);
       // Reflections follow the curved liquid surface rather than a uniform white outline.
       float plasma = noise(direction * 6.0 + vec2(time * 0.55, distanceToEdge * 90.0));
       float core = (1.0 - smoothstep(thickness * 0.12, thickness * 0.63, distanceToEdge))
@@ -316,14 +317,15 @@ class MelodyFlowMotion {
       float bloom = exp(-distanceToEdge * 100.0) * exterior;
       float outward = max(0.0, length(p) - contour - thickness);
       // Charging-ring reference: smooth light shafts, layered halos and focused poles.
-      // The reach stays within the previous aurora envelope; the ring radius is unchanged.
-      float reach = 0.045 + snare * 0.060;
+      // Taller upper light curtains, with a softer reach at the sides.
+      float upper = smoothstep(-0.1, 0.8, sin(a));
+      float reach = (0.065 + snare * 0.10) * (1.0 + upper * 1.15);
       float pole = pow(abs(sin(a)), 10.0);
       float shaftField = pow(0.5 + 0.5 * sin(a * 13.0 + time * 0.20 + flow * 0.5), 28.0);
       float fineField = pow(0.5 + 0.5 * sin(a * 29.0 - time * 0.13), 64.0);
       float fade = exp(-outward / (reach * (0.32 + pole * 0.75)))
                  * (1.0 - smoothstep(reach, reach * 1.7, outward));
-      float softHalo = exp(-outward * 48.0) * 0.16;
+      float softHalo = exp(-outward * mix(48.0, 21.0, upper)) * 0.20;
       float aurora = exterior * snare * (softHalo + fade * (shaftField * 0.35 + fineField * 0.06 + pole * 0.35));
       float haloBand = exp(-abs(outward - 0.008 - 0.003 * sin(a * 3.0 - time * 0.4)) * 550.0);
       float arcLight = pow(0.5 + 0.5 * sin(a * 2.0 + time * 0.25), 8.0);
@@ -335,7 +337,7 @@ class MelodyFlowMotion {
       vec3 color = edgeColor * (edge * (1.3 + pulse + snare) + bloom * (0.4 + pulse * 0.5));
       float strand = pow(0.5 + 0.5 * sin(distanceToEdge * 360.0 + flow * 8.0 - time * 1.3), 6.0);
       color += edgeColor * strand * edge * 0.8;
-      vec3 auroraTint = mix(vec3(0.12,0.025,1.0), vec3(0.58,0.035,1.0), pole);
+      vec3 auroraTint = mix(edgeColor, vec3(0.32,0.48,1.0), 0.18);
       color += auroraTint * aurora * 3.1;
       // Multiple thin concentric charging tracks, brightest at the two poles.
       float tracks = exp(-abs(outward - 0.006) * 1100.0)
@@ -381,6 +383,35 @@ class MelodyFlowMotion {
       liquid += vec3(1.0,0.86,0.94) * softHighlight * 1.6;
       float wetRim = exp(-abs(radial - 0.964) * 92.0);
       liquid += palette(filmPhase + 0.04) * wetRim * (0.45 + reflectionMask);
+      // Up to seven independently curved sheets. Seeded offsets vary continuously
+      // with melody phase, while RMS controls how many sheets emerge, without popping.
+      vec3 plumes = vec3(0.0);
+      float population = 2.0 + energy * 5.0;
+      for (int i = 0; i < 7; i++) {
+        float index = float(i);
+        float seed = hash(vec2(index + 3.7, 9.2));
+        float seed2 = hash(vec2(index + 18.1, 4.8));
+        float active = smoothstep(index - 0.5, index + 0.5, population);
+        float life = 0.35 + 0.65 * smoothstep(-0.65, 0.75,
+                     sin(t * (0.37 + seed * 0.27) + seed2 * 17.0));
+        float angle = seed * 6.2831853 + t * (seed2 - 0.5) * 0.35;
+        mat2 bendRotation = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
+        vec2 offset = vec2(sin(t * 0.31 + seed * 13.0), cos(t * 0.27 + seed2 * 11.0)) * 0.30;
+        vec2 local = bendRotation * (v - offset);
+        float bend = sin(local.x * (1.7 + seed * 2.4) + t * 0.41 + seed2 * 9.0)
+                   * (0.20 + seed2 * 0.28);
+        float span = 1.0 - smoothstep(0.65, 1.12, abs(local.x));
+        float width = 0.035 + (0.045 + seed * 0.065)
+                    * (0.5 + 0.5 * sin(local.x * 2.5 + seed2 * 8.0 + t * 0.25));
+        float distanceToSheet = local.y - bend;
+        float sheetLight = exp(-pow(distanceToSheet / width, 2.0));
+        float softVeil = exp(-pow(distanceToSheet / (width * 2.8), 2.0)) * 0.20;
+        vec3 plumeColor = palette(seed + local.x * 0.15 + heightField * 0.08 + t * 0.015);
+        vec3 sheen = mix(plumeColor, vec3(0.76,0.94,1.0), 0.20);
+        plumes += (plumeColor * (sheetLight + softVeil)
+                + sheen * pow(sheetLight, 4.0) * 0.18) * span * life * active;
+      }
+      liquid = liquid * 0.78 + plumes * (0.48 + energy * 0.28);
       color += liquid * inside * melody;
       color = vec3(1.0) - exp(-color * 1.35);
       gl_FragColor = vec4(color,1.0);
@@ -478,6 +509,8 @@ class MelodyFlowMotion {
 
   let kickAnalyser = null;
   let kickSpectrum = null;
+  let intensitySamples = null;
+  let musicIntensity = 0;
   const kickDetector = new KickOnsetDetector();
   const snareDetector = new SnareOnsetDetector();
   const melodyDetector = new MelodyOnsetDetector();
@@ -496,6 +529,7 @@ class MelodyFlowMotion {
     tempo.reset();
     melodyMotion.reset();
     lastPulseFrame = 0;
+    musicIntensity = 0;
     melodyPulse = 0;
     snarePulse = 0;
     pulse = 0;
@@ -521,8 +555,15 @@ class MelodyFlowMotion {
         kickAnalyser.smoothingTimeConstant = 0;
         source.connect(kickAnalyser);
         kickSpectrum = new Float32Array(kickAnalyser.frequencyBinCount);
+        intensitySamples = new Float32Array(kickAnalyser.fftSize);
       }
       kickAnalyser.getFloatFrequencyData(kickSpectrum);
+      kickAnalyser.getFloatTimeDomainData(intensitySamples);
+      let squareSum = 0;
+      for (const sample of intensitySamples) squareSum += sample * sample;
+      const targetIntensity = Math.min(1, Math.sqrt(squareSum / intensitySamples.length) * 5);
+      // Smooth gain changes so sheets emerge and fade rather than flashing on beats.
+      musicIntensity += (targetIntensity - musicIntensity) * (1 - Math.exp(-dt / (targetIntensity > musicIntensity ? 110 : 420)));
       if (window.sinestesiaSpectrumFrame) window.sinestesiaSpectrumFrame(kickSpectrum, audioContext.sampleRate, now);
       const hit = kickDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
       if (hit) { pulse = Math.max(pulse, hit); tempo.add(audio.currentTime * 1000); }
@@ -532,10 +573,11 @@ class MelodyFlowMotion {
       tonalHit = melodyHit;
       if (melodyHit) { melodyPulse = 1; melodySeed += 1.618; }
     }
+    if (audio.paused) musicIntensity = 0;
     melodyMotion.update(dt, now, tonalHit, !audio.paused);
-    window.sinestesiaKickReadout = { melodySpeed: melodyMotion.speed, melodyPhase: melodyMotion.phase, pulse, snare: snarePulse, melody: melodyPulse, melodyHz: melodyPulse > 0.05 ? melodyDetector.peakHz : 0, hz: pulse > 0.05 ? kickDetector.peakHz : 0, bpm: tempo.bpm, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
+    window.sinestesiaKickReadout = { intensity: musicIntensity, plasmaCount: 2 + musicIntensity * 5, melodySpeed: melodyMotion.speed, melodyPhase: melodyMotion.phase, pulse, snare: snarePulse, melody: melodyPulse, melodyHz: melodyPulse > 0.05 ? melodyDetector.peakHz : 0, hz: pulse > 0.05 ? kickDetector.peakHz : 0, bpm: tempo.bpm, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
     const gain = Number(document.getElementById('fluidIntensity').value) || 1.35;
-    return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35), melody: Math.min(1, melodyMotion.level * gain / 1.35), motion: melodyMotion.phase, note: melodySeed + Math.min(1, melodyDetector.peakHz / 8000) };
+    return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35), melody: Math.min(1, melodyMotion.level * gain / 1.35), intensity: musicIntensity, motion: melodyMotion.phase, note: melodySeed + Math.min(1, melodyDetector.peakHz / 8000) };
   }
 
   let visualKick = 0, visualSnare = 0, visualLast = 0;
@@ -569,7 +611,7 @@ class MelodyFlowMotion {
       ctx.lineWidth = Math.max(1, height * 0.003);
       for (let i = 0; i < 24; i++) {
         const a = i / 24 * Math.PI * 2;
-        const reach = height * signal.snare * (0.025 + 0.04 * (0.5 + 0.5 * Math.sin(i * 13.7 + contourClock * 12)));
+        const reach = height * signal.snare * (0.05 + 0.09 * (0.5 + 0.5 * Math.sin(i * 13.7 + contourClock * 12))) * (1 + Math.max(0, -Math.sin(a)));
         ctx.globalAlpha = signal.snare * 0.7;
         const start = radius + height * (0.006 + level * 0.003);
         ctx.beginPath();
@@ -586,8 +628,12 @@ class MelodyFlowMotion {
       body.addColorStop(0, '#311022'); body.addColorStop(0.6, '#170106'); body.addColorStop(1, '#030009');
       ctx.fillStyle = body; ctx.fillRect(width / 2 - radius, height * 0.43 - radius, radius * 2, radius * 2);
       ctx.globalCompositeOperation = 'lighter';
-      for (let band = 0; band < 3; band++) {
-        const phase = band * Math.PI * 2 / 3;
+      const population = 2 + signal.intensity * 5;
+      for (let band = 0; band < 7; band++) {
+        const active = clamp(population - band + 0.5);
+        if (active === 0) continue;
+        ctx.globalAlpha = signal.melody * active * (0.55 + 0.45 * Math.sin(signal.motion * 0.17 + band * 2.71) ** 2);
+        const phase = band * 2.399963 + Math.sin(signal.motion * 0.11 + band) * 0.45;
         ctx.beginPath();
         for (let i = 0; i <= 100; i++) {
           const r = i / 100;
@@ -597,7 +643,7 @@ class MelodyFlowMotion {
           const py = height * 0.43 + Math.sin(angle) * radius * r;
           if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         }
-        ctx.strokeStyle = ['#02cfff', '#ffba08', '#4824f0'][band];
+        ctx.strokeStyle = ['#02cfff', '#ffba08', '#4824f0', '#ff690a', '#1676ff', '#22eedd', '#ee477f'][band];
         ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = radius * 0.14;
         ctx.lineWidth = radius * (0.09 + signal.melody * 0.10); ctx.stroke();
         ctx.strokeStyle = '#d3e7ef'; ctx.lineWidth *= 0.16; ctx.stroke();
@@ -655,7 +701,7 @@ class MelodyFlowMotion {
     }
 
     const percussion = fluidSignal();
-    const signal = { bass: percussion.kick, mid: percussion.snare, treble: percussion.melody, energy: percussion.note };
+    const signal = { bass: percussion.kick, mid: percussion.snare, treble: percussion.melody, energy: percussion.intensity };
     surface.style.filter = baseCanvas.style.filter;
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT);
