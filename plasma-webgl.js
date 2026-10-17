@@ -281,6 +281,15 @@ class MelodyFlowMotion {
       return mix(violet,blue,smoothstep(5.0,6.0,x));
     }
 
+    // Smooth domain-warped surface: broad liquid folds rather than granular noise.
+    float liquidHeight(vec2 v, float t) {
+      vec2 w = v + 0.24 * vec2(sin(v.y * 2.8 + t * 0.43),
+                                sin(v.x * 3.1 - t * 0.36));
+      return sin(w.x * 3.4 + w.y * 1.7 + t * 0.32) * 0.50
+           + sin(w.y * 4.0 - w.x * 1.3 - t * 0.40) * 0.28
+           + sin(w.x * 5.1 + w.y * 3.2 + t * 0.21) * 0.12;
+    }
+
     void main() {
       vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
       p.y -= 0.07;
@@ -291,6 +300,7 @@ class MelodyFlowMotion {
       float flow = noise(direction * 2.7 + vec2(time * 0.23, -time * 0.17));
       float fold = sin(a * 3.0 + time * 0.75 + flow * 2.2);
       float contour = radius * (1.0 + (0.004 + pulse * 0.018) * fold
+        + treble * 0.018 * sin(a * 3.0 + melodyTime * 0.35)
         + 0.004 * sin(a * 2.0 - time * 0.53) + 0.002 * sin(a * 5.0 + time * 0.4));
       float distanceToEdge = abs(length(p) - contour);
       float snare = clamp(mid, 0.0, 1.0);
@@ -339,29 +349,38 @@ class MelodyFlowMotion {
       vec2 q = p / max(contour, 0.01);
       float radial = length(q);
       float inside = 1.0 - smoothstep(0.94, 1.0, radial);
-      // Two broad twisting lobes sweep from one bright nucleus to the sphere edge.
-      // Polar folds avoid the parallel sine-wave ladder of the previous interior.
-      vec2 nucleusPosition = vec2(sin(melodyTime * 0.63), cos(melodyTime * 0.47)) * 0.065;
-      vec2 v = q - nucleusPosition;
-      float r = length(v);
-      float theta = atan(v.y, v.x);
-      float twist = theta - melodyTime * 0.55 + r * 2.1
-                  + sin(r * 3.4 - melodyTime * 0.42) * 0.55;
-      float liquidFold = sin(twist + sin(theta + melodyTime * 0.27) * r * 0.65);
-      float width = 0.16 + 0.32 * r * r;
-      float sheet = exp(-pow(liquidFold / width, 2.0));
-      float veil = exp(-pow((liquidFold - 0.22) / (width * 1.8), 2.0)) * 0.30;
-      float edgeFold = exp(-abs(liquidFold) / 0.065) * 0.12;
-      vec3 tint = mix(vec3(0.10,0.32,1.0), vec3(1.0,0.055,0.47),
-                      0.5 + 0.5 * sin(twist + r * 1.8 + melodyTime * 0.18));
-      vec3 liquid = tint * (sheet * 1.2 + veil + edgeFold);
-      float hot = pow(sheet, 3.0) * (0.5 + 0.5 * sin(twist + 0.8));
-      liquid += vec3(0.70,0.85,1.0) * hot * 1.15;
-      float nucleus = exp(-r * 24.0);
-      liquid += vec3(1.0,0.62,0.86) * nucleus * 2.8;
-      float innerRim = exp(-abs(radial - 0.965) * 65.0);
-      liquid += mix(vec3(0.22,0.32,1.0),vec3(1.0,0.28,0.58),
-                    0.5 + 0.5 * sin(theta + melodyTime * 0.3)) * innerRim * 0.6;
+      // Reference: dark wine body, broad iridescent reflections and liquid folds.
+      // All material motion uses the melody phase; percussion only expands the ring.
+      float t = melodyTime * 0.42;
+      float turn = t * 0.18;
+      mat2 rotation = mat2(cos(turn), -sin(turn), sin(turn), cos(turn));
+      vec2 v = rotation * q;
+      float z = sqrt(max(0.0, 1.0 - min(1.0, dot(v,v))));
+      float heightField = liquidHeight(v, t);
+      vec2 slope = vec2(liquidHeight(v + vec2(0.012,0.0), t) - heightField,
+                        liquidHeight(v + vec2(0.0,0.012), t) - heightField) / 0.012;
+      vec3 normal = normalize(vec3(v - slope * (0.14 + melody * 0.045), z + 0.14));
+      vec3 reflected = reflect(vec3(0.0,0.0,-1.0), normal);
+      float fresnel = pow(1.0 - max(0.0,normal.z), 2.0);
+      // Large virtual softboxes glide over the warped surface as it turns.
+      float coolPanel = pow(max(0.0,dot(reflected,normalize(vec3(-0.65,0.7,0.55)))), 7.0);
+      float warmPanel = pow(max(0.0,dot(reflected,normalize(vec3(0.7,-0.6,0.30)))), 5.0);
+      float foldBand = pow(0.5 + 0.5 * sin(heightField * 7.0 + z * 4.0), 7.0);
+      float filmPhase = reflected.x * 0.24 + reflected.y * 0.21
+                      + heightField * 0.19 + fresnel * 0.29 + t * 0.018;
+      vec3 film = palette(filmPhase + 0.12);
+      float reflectionMask = coolPanel * 1.1 + warmPanel * 0.9
+                           + fresnel * 0.85 + foldBand * (0.08 + radial * 0.22);
+      vec3 body = vec3(0.065,0.0015,0.008) * (0.45 + z * 0.55);
+      // Restrained internal light preserves the burgundy shadow between reflections.
+      body += vec3(0.045,0.018,0.001) * (0.5 + 0.5 * heightField);
+      vec3 liquid = body + film * reflectionMask * 1.55;
+      liquid += vec3(0.45,0.92,1.0) * pow(coolPanel,2.0) * 0.9;
+      liquid += vec3(1.0,0.79,0.28) * pow(warmPanel,2.0) * 0.45;
+      float softHighlight = pow(max(0.0,dot(reflected,normalize(vec3(-0.52,0.78,0.65)))),24.0);
+      liquid += vec3(1.0,0.86,0.94) * softHighlight * 1.6;
+      float wetRim = exp(-abs(radial - 0.964) * 92.0);
+      liquid += palette(filmPhase + 0.04) * wetRim * (0.45 + reflectionMask);
       color += liquid * inside * melody;
       color = vec3(1.0) - exp(-color * 1.35);
       gl_FragColor = vec4(color,1.0);
@@ -563,6 +582,9 @@ class MelodyFlowMotion {
       ctx.save();
       ctx.beginPath(); ctx.arc(width / 2, height * 0.43, radius - height * 0.015, 0, Math.PI * 2); ctx.clip();
       ctx.globalAlpha = signal.melody;
+      const body = ctx.createRadialGradient(width / 2 - radius * 0.3, height * 0.43 - radius * 0.4, 0, width / 2, height * 0.43, radius);
+      body.addColorStop(0, '#311022'); body.addColorStop(0.6, '#170106'); body.addColorStop(1, '#030009');
+      ctx.fillStyle = body; ctx.fillRect(width / 2 - radius, height * 0.43 - radius, radius * 2, radius * 2);
       ctx.globalCompositeOperation = 'lighter';
       for (let band = 0; band < 3; band++) {
         const phase = band * Math.PI * 2 / 3;
@@ -575,10 +597,10 @@ class MelodyFlowMotion {
           const py = height * 0.43 + Math.sin(angle) * radius * r;
           if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         }
-        ctx.strokeStyle = ['#ff42bb', '#598bff', '#b85cff'][band];
+        ctx.strokeStyle = ['#02cfff', '#ffba08', '#4824f0'][band];
         ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = radius * 0.14;
-        ctx.lineWidth = radius * (0.045 + signal.melody * 0.08); ctx.stroke();
-        ctx.strokeStyle = '#c9d4ff'; ctx.lineWidth *= 0.35; ctx.stroke();
+        ctx.lineWidth = radius * (0.09 + signal.melody * 0.10); ctx.stroke();
+        ctx.strokeStyle = '#d3e7ef'; ctx.lineWidth *= 0.16; ctx.stroke();
       }
       ctx.restore();
     }
