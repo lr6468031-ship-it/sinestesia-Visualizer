@@ -222,6 +222,17 @@ class MelodyOnsetDetector {
       return mix(magenta, deepBlue, (x - 0.76) / 0.24);
     }
 
+    vec2 starPoint(float i, float t, float note) {
+      float angle = i * 2.39996 + sin(t * 0.35 + i) * 0.18 + note * 1.8;
+      float orbit = 0.05 + 0.10 * hash(vec2(i, 3.7));
+      return vec2(cos(angle), sin(angle)) * orbit
+           + vec2(sin(t * 0.6 + i * 2.0), cos(t * 0.5 + i)) * 0.014;
+    }
+    float segmentDistance(vec2 p, vec2 a, vec2 b) {
+      vec2 ab = b - a;
+      return length(p - a - ab * clamp(dot(p - a, ab) / max(dot(ab, ab), 0.00001), 0.0, 1.0));
+    }
+
     void main() {
       vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
       p.y -= 0.07;
@@ -248,12 +259,24 @@ class MelodyOnsetDetector {
       vec3 color = edgeColor * (edge * (1.3 + pulse + snare) + bloom * (0.4 + pulse * 0.5));
       color += vec3(1.0) * core * edge * (1.15 + pulse + snare * 1.5);
       color += mix(edgeColor, vec3(1.0), 0.35) * aurora * 2.0;
-      // Small pearl-like pulses hug the outside of the ring; no light fills its center.
+      // Tonal notes illuminate moving stars and short lightning links inside the hollow ring.
       float melody = clamp(treble, 0.0, 1.0);
-      float pearls = pow(0.5 + 0.5 * cos(a * 12.0 + energy * 6.2831853), 18.0);
-      float miniDistance = abs(length(p) - contour - thickness - 0.009 - melody * 0.009);
-      float miniPulse = exp(-miniDistance * 420.0) * pearls * melody * exterior;
-      color += mix(edgeColor, vec3(0.65, 1.0, 0.88), 0.7) * miniPulse * 3.0;
+      float inside = 1.0 - smoothstep(contour - thickness - 0.012, contour - thickness - 0.005, length(p));
+      vec3 stars = vec3(0.0);
+      for (int i = 0; i < 7; i++) {
+        float index = float(i);
+        vec2 star = starPoint(index, time, energy);
+        vec2 next = starPoint(mod(index + 1.0, 7.0), time, energy);
+        float sparkle = 0.6 + 0.4 * sin(index * 2.7 + energy * 13.0 + time * 2.0);
+        float dotGlow = exp(-length(p - star) * 450.0);
+        vec2 normal = normalize(vec2(-(next - star).y, (next - star).x));
+        vec2 joint = mix(star, next, 0.48) + normal * sin(index * 7.0 + time * 18.0) * 0.009 * melody;
+        float bolt = min(segmentDistance(p, star, joint), segmentDistance(p, joint, next));
+        float link = exp(-bolt * 1000.0) * (0.15 + melody * 0.5);
+        vec3 tint = mix(palette(index / 7.0), vec3(0.7, 1.0, 0.9), 0.65);
+        stars += tint * (dotGlow * (1.5 + sparkle) + link) * melody;
+      }
+      color += stars * inside;
       color = vec3(1.0) - exp(-color * 1.35);
       gl_FragColor = vec4(color,1.0);
     }
@@ -431,16 +454,24 @@ class MelodyOnsetDetector {
       }
     }
     if (signal.melody > 0.01) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(width / 2, height * 0.43, radius - height * 0.015, 0, Math.PI * 2); ctx.clip();
       ctx.globalAlpha = signal.melody;
-      ctx.strokeStyle = '#baffdc';
-      ctx.lineWidth = 1.5;
-      for (let i = 0; i < 12; i++) {
-        const a = i / 12 * Math.PI * 2 - signal.note * Math.PI / 6;
-        const r = radius + height * (0.017 + level * 0.003 + signal.melody * 0.009);
-        ctx.beginPath();
-        ctx.arc(width / 2 + Math.cos(a) * r, height * 0.43 + Math.sin(a) * r, 1.5 + signal.melody * 2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+      const stars = Array.from({ length: 7 }, (_, i) => {
+        const angle = i * 2.39996 + Math.sin(contourClock * 0.35 + i) * 0.18 + signal.note * 1.8;
+        const orbit = radius * (0.22 + 0.36 * (0.5 + 0.5 * Math.sin(i * 8.7)));
+        return { x: width / 2 + Math.cos(angle) * orbit, y: height * 0.43 + Math.sin(angle) * orbit };
+      });
+      ctx.strokeStyle = '#83ddff'; ctx.lineWidth = 1;
+      stars.forEach((star, i) => {
+        const next = stars[(i + 1) % stars.length];
+        ctx.beginPath(); ctx.moveTo(star.x, star.y);
+        ctx.lineTo((star.x + next.x) / 2 + Math.sin(i * 7 + contourClock * 18) * signal.melody * 4, (star.y + next.y) / 2);
+        ctx.lineTo(next.x, next.y); ctx.stroke();
+        ctx.fillStyle = '#d5ffed'; ctx.beginPath();
+        ctx.arc(star.x, star.y, 1.5 + signal.melody * 2, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.restore();
     }
     ctx.restore();
   }

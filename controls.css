@@ -226,3 +226,6 @@
 .snare-point { top: 52%; }
 .kick-point { top: 22%; }
 .melody-setting { color: #a0ffd5; accent-color: #83ffc6; }
+.spectrum-shortcut { display: inline-block; width: 100%; color: #c7ffe3; background: #14251f; border: 1px solid #447a66; padding: 12px; border-radius: 10px; text-decoration: none; font-size: 13px; }
+.spectrum-title { font-size: 16px; margin: 0 0 12px; color: #ddffec; }
+#spectrumEditor { scroll-margin-top: 14px; }
