@@ -383,36 +383,44 @@ class MelodyFlowMotion {
       liquid += vec3(1.0,0.86,0.94) * softHighlight * 1.6;
       float wetRim = exp(-abs(radial - 0.964) * 92.0);
       liquid += palette(filmPhase + 0.04) * wetRim * (0.45 + reflectionMask);
-      // Up to seven independently curved sheets. Seeded offsets vary continuously
-      // with melody phase, while RMS controls how many sheets emerge, without popping.
+      // Every stream shares the same fixed origin; only its fluid bend evolves.
       vec3 plumes = vec3(0.0);
       float population = 2.0 + energy * 5.0;
+      float centerRadius = length(q);
+      float centerAngle = atan(q.y, q.x);
       for (int i = 0; i < 7; i++) {
         float index = float(i);
         float seed = hash(vec2(index + 3.7, 9.2));
         float seed2 = hash(vec2(index + 18.1, 4.8));
         float active = smoothstep(index - 0.5, index + 0.5, population);
-        float life = 0.35 + 0.65 * smoothstep(-0.65, 0.75,
+        float life = 0.40 + 0.60 * smoothstep(-0.65, 0.75,
                      sin(t * (0.37 + seed * 0.27) + seed2 * 17.0));
-        float angle = seed * 6.2831853 + t * (seed2 - 0.5) * 0.35;
-        mat2 bendRotation = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
-        vec2 offset = vec2(sin(t * 0.31 + seed * 13.0), cos(t * 0.27 + seed2 * 11.0)) * 0.30;
-        vec2 local = bendRotation * (v - offset);
-        float bend = sin(local.x * (1.7 + seed * 2.4) + t * 0.41 + seed2 * 9.0)
-                   * (0.20 + seed2 * 0.28);
-        float span = 1.0 - smoothstep(0.65, 1.12, abs(local.x));
-        float width = 0.035 + (0.045 + seed * 0.065)
-                    * (0.5 + 0.5 * sin(local.x * 2.5 + seed2 * 8.0 + t * 0.25));
-        float distanceToSheet = local.y - bend;
-        float sheetLight = exp(-pow(distanceToSheet / width, 2.0));
-        float softVeil = exp(-pow(distanceToSheet / (width * 2.8), 2.0)) * 0.20;
-        vec3 plumeColor = palette(seed + local.x * 0.15 + heightField * 0.08 + t * 0.015);
-        vec3 sheen = mix(plumeColor, vec3(0.76,0.94,1.0), 0.20);
-        plumes += (plumeColor * (sheetLight + softVeil)
-                + sheen * pow(sheetLight, 4.0) * 0.18) * span * life * active;
+        float angle = index * 2.399963 + seed * 0.45 + t * (seed2 - 0.5) * 0.35;
+        float curve = angle + centerRadius * (1.1 + seed * 1.2)
+                    + sin(centerRadius * 3.4 - t * 0.42 + seed2 * 6.0)
+                    * centerRadius * (0.40 + seed * 0.35);
+        float delta = centerAngle - curve;
+        // Distance to a single curved ray, whose width opens away from the nucleus.
+        float distanceToSheet = sin(delta) * centerRadius;
+        float forward = smoothstep(-0.15, 0.25, cos(delta));
+        float width = 0.014 + centerRadius * (0.055 + seed * 0.085)
+                    * (0.85 + 0.15 * sin(centerRadius * 3.0 + t * 0.25 + seed2 * 7.0));
+        float sheetLight = exp(-pow(distanceToSheet / width, 2.0)) * forward;
+        float softVeil = exp(-pow(distanceToSheet / (width * 2.6), 2.0)) * forward * 0.22;
+        // Spread hues across the full contour palette instead of repeating a few seeds.
+        vec3 plumeColor = palette(index / 7.0 + seed * 0.06 + centerRadius * 0.28 + t * 0.035);
+        float transport = 0.78 + 0.22 * sin(centerRadius * 7.0 + sin(t * 0.38 + seed2) * 4.0);
+        plumes += plumeColor * (sheetLight + softVeil) * transport * life * active;
       }
-      liquid = liquid * 0.78 + plumes * (0.48 + energy * 0.28);
+      // Keep a dark liquid body behind the connected streams and a single, stable core.
+      float coreMask = smoothstep(0.008, 0.03, centerRadius);
+      liquid = liquid * 0.42 + plumes * coreMask * (0.95 + energy * 0.40);
       color += liquid * inside * melody;
+      float nucleus = exp(-centerRadius * 100.0);
+      float nucleusHalo = exp(-centerRadius * 25.0);
+      color += vec3(1.0,0.88,0.98) * nucleus * (1.7 + energy * 1.8);
+      color += mix(palette(melodyTime * 0.018), vec3(0.72,0.85,1.0),0.35)
+             * nucleusHalo * (0.08 + melody * 0.30);
       color = vec3(1.0) - exp(-color * 1.35);
       gl_FragColor = vec4(color,1.0);
     }
@@ -643,13 +651,22 @@ class MelodyFlowMotion {
           const py = height * 0.43 + Math.sin(angle) * radius * r;
           if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         }
-        ctx.strokeStyle = ['#02cfff', '#ffba08', '#4824f0', '#ff690a', '#1676ff', '#22eedd', '#ee477f'][band];
-        ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = radius * 0.14;
+        const streamGradient = ctx.createLinearGradient(width / 2 - radius, height * 0.43, width / 2 + radius, height * 0.43);
+        const colors = ['#0838ff', '#03edff', '#ffe915', '#ff6208', '#60051b', '#7925f2', '#0838ff'];
+        colors.forEach((color, i) => streamGradient.addColorStop(i / 6, colors[(i + band) % colors.length]));
+        ctx.strokeStyle = streamGradient;
+        ctx.shadowColor = ['#04ceff','#ffc413','#7d35ff'][band % 3]; ctx.shadowBlur = radius * 0.14;
         ctx.lineWidth = radius * (0.09 + signal.melody * 0.10); ctx.stroke();
         ctx.strokeStyle = '#d3e7ef'; ctx.lineWidth *= 0.16; ctx.stroke();
       }
       ctx.restore();
     }
+    // The shared central energy point remains visible even between melodic attacks.
+    ctx.globalAlpha = 1;
+    const coreGlow = ctx.createRadialGradient(width / 2, height * 0.43, 0, width / 2, height * 0.43, radius * 0.10);
+    coreGlow.addColorStop(0, '#fff2ff'); coreGlow.addColorStop(0.14, '#ccd9ff');
+    coreGlow.addColorStop(0.4, 'rgba(125,140,255,0.25)'); coreGlow.addColorStop(1, 'rgba(125,140,255,0)');
+    ctx.fillStyle = coreGlow; ctx.fillRect(width / 2 - radius * 0.1, height * 0.43 - radius * 0.1, radius * 0.2, radius * 0.2);
     ctx.restore();
   }
 
