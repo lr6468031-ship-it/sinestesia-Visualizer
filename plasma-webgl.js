@@ -152,6 +152,30 @@ class MelodyOnsetDetector {
   }
 }
 
+// A continuous phase driven only by tonal onsets, independent of kick tempo and FPS.
+class MelodyFlowMotion {
+  constructor() { this.reset(); }
+  reset() { this.phase = 0; this.speed = 0; this.lastHit = null; this.interval = null; this.level = 0; }
+  update(dt, now, hit, playing = true) {
+    if (!playing) { this.speed = 0; this.level = 0; this.lastHit = null; this.interval = null; return this; }
+    dt = Math.max(0, Math.min(100, dt));
+    if (hit) {
+      if (this.lastHit !== null) {
+        const gap = now - this.lastHit;
+        if (gap >= 95 && gap <= 2500) this.interval = this.interval === null ? gap : this.interval * 0.55 + gap * 0.45;
+        else this.interval = null;
+      }
+      this.lastHit = now;
+      this.level = 1;
+    } else this.level *= Math.exp(-dt / 520);
+    const active = this.lastHit !== null && now - this.lastHit < Math.max(650, (this.interval || 500) * 1.8);
+    const target = active ? Math.min(8, 1000 / (this.interval || 500)) * Math.PI * 0.65 : 0;
+    this.speed += (target - this.speed) * (1 - Math.exp(-dt / (active ? 100 : 200)));
+    this.phase += this.speed * dt / 1000;
+    return this;
+  }
+}
+
 // WebGL plasma fallback for Sinestesia Visualizer.
 // Performance-tuned for mobile while preserving the electric organic look.
 (() => {
@@ -212,7 +236,7 @@ class MelodyOnsetDetector {
     uniform float mid;
     uniform float treble;
     uniform float energy;
-    uniform vec2 starPoints[8];
+    uniform float melodyTime;
 
     float hash(vec2 p) {
       p = fract(p * vec2(123.34, 456.21));
@@ -257,11 +281,6 @@ class MelodyOnsetDetector {
       return mix(violet,blue,smoothstep(5.0,6.0,x));
     }
 
-    float segmentDistance(vec2 p, vec2 a, vec2 b) {
-      vec2 ab = b - a;
-      return length(p - a - ab * clamp(dot(p - a, ab) / max(dot(ab, ab), 0.00001), 0.0, 1.0));
-    }
-
     void main() {
       vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
       p.y -= 0.07;
@@ -271,15 +290,15 @@ class MelodyOnsetDetector {
       vec2 direction = vec2(cos(a), sin(a));
       float flow = noise(direction * 2.7 + vec2(time * 0.23, -time * 0.17));
       float fold = sin(a * 3.0 + time * 0.75 + flow * 2.2);
-      float contour = radius * (1.0 + (0.025 + pulse * 0.065) * fold
-        + 0.020 * sin(a * 2.0 - time * 0.53) + 0.012 * sin(a * 5.0 + time * 0.4));
+      float contour = radius * (1.0 + (0.004 + pulse * 0.018) * fold
+        + 0.004 * sin(a * 2.0 - time * 0.53) + 0.002 * sin(a * 5.0 + time * 0.4));
       float distanceToEdge = abs(length(p) - contour);
       float snare = clamp(mid, 0.0, 1.0);
       float ribbon = 0.5 + 0.5 * sin(a * 2.0 - time * 0.65 + flow * 5.0);
-      float thickness = 0.004 + pow(ribbon, 2.0) * (0.020 + pulse * 0.014) + snare * 0.002;
+      float thickness = 0.0015 + pow(ribbon, 2.0) * (0.003 + pulse * 0.003) + snare * 0.002;
       float edge = 1.0 - smoothstep(thickness, thickness + 0.002, distanceToEdge);
       float exterior = step(contour + thickness, length(p));
-      vec3 edgeColor = palette(a / 6.2831853 + time * 0.025 + flow * 0.22);
+      vec3 edgeColor = mix(vec3(0.025,0.12,1.0), vec3(0.65,0.035,1.0), ribbon);
       // Reflections follow the curved liquid surface rather than a uniform white outline.
       float plasma = noise(direction * 6.0 + vec2(time * 0.55, distanceToEdge * 90.0));
       float core = (1.0 - smoothstep(thickness * 0.12, thickness * 0.63, distanceToEdge))
@@ -295,61 +314,55 @@ class MelodyOnsetDetector {
       float fade = exp(-outward / (reach * (0.32 + pole * 0.75)))
                  * (1.0 - smoothstep(reach, reach * 1.7, outward));
       float softHalo = exp(-outward * 48.0) * 0.16;
-      float aurora = exterior * snare * (softHalo + fade * (shaftField * 0.9 + fineField * 0.25 + pole * 0.18));
+      float aurora = exterior * snare * (softHalo + fade * (shaftField * 0.35 + fineField * 0.06 + pole * 0.35));
       float haloBand = exp(-abs(outward - 0.008 - 0.003 * sin(a * 3.0 - time * 0.4)) * 550.0);
       float arcLight = pow(0.5 + 0.5 * sin(a * 2.0 + time * 0.25), 8.0);
       float down = max(0.0, -p.y - contour - thickness);
       float beamWidth = 0.0012 + down * 0.013;
       float beamAxis = p.x + sin(down * 13.0 - time * 0.4) * 0.002;
-      float tail = exp(-abs(beamAxis) / beamWidth) * exp(-down * 20.0)
-                 * step(0.001, down) * (1.0 - smoothstep(0.11, 0.17, down)) * snare;
+      float tail = exp(-abs(beamAxis) / beamWidth) * exp(-down * 7.0)
+                 * step(0.001, down) * (1.0 - smoothstep(0.32, 0.48, down)) * snare;
       vec3 color = edgeColor * (edge * (1.3 + pulse + snare) + bloom * (0.4 + pulse * 0.5));
       float strand = pow(0.5 + 0.5 * sin(distanceToEdge * 360.0 + flow * 8.0 - time * 1.3), 6.0);
       color += edgeColor * strand * edge * 0.8;
+      vec3 auroraTint = mix(vec3(0.12,0.025,1.0), vec3(0.58,0.035,1.0), pole);
+      color += auroraTint * aurora * 3.1;
+      // Multiple thin concentric charging tracks, brightest at the two poles.
+      float tracks = exp(-abs(outward - 0.006) * 1100.0)
+                   + exp(-abs(outward - 0.013) * 1000.0) * 0.65
+                   + exp(-abs(outward - 0.021) * 900.0) * 0.30;
+      color += mix(auroraTint, vec3(0.75,0.92,1.0), pole * 0.85)
+             * tracks * exterior * snare * (0.3 + pole * 2.2);
+      color += vec3(0.3,0.48,1.0) * tail * 3.0;
+      // Video reference: continuous translucent folded membranes, no stars or links.
+      float melody = clamp(treble, 0.0, 1.0);
       vec2 q = p / max(contour, 0.01);
       float radial = length(q);
-      float z = sqrt(max(0.0, 1.0 - min(1.0, radial * radial)));
-      vec2 warp = q + vec2(sin(q.y * 4.0 + time * 0.48), cos(q.x * 3.0 - time * 0.37)) * (0.13 + pulse * 0.08);
-      float crease = sin(warp.x * 4.0 + warp.y * 2.0 + flow * 5.0 - time * 0.32);
-      vec3 normal = normalize(vec3(warp + direction * crease * 0.10, z * 0.85 + 0.08));
-      vec3 keyLight = normalize(vec3(-0.65, 0.7, 0.8));
-      float reflection = pow(max(0.0, dot(reflect(-keyLight, normal), vec3(0.0,0.0,1.0))), 22.0);
-      float rimReflection = pow(0.5 + 0.5 * sin(a * 2.0 + time * 0.42 + flow * 4.0), 10.0);
-      color += vec3(0.85,0.98,1.0) * core * edge * rimReflection * (1.1 + pulse + snare);
-      // Broad, folded chrome sheets fade out before the central constellation area.
-      float shellMask = (1.0-smoothstep(0.98,1.015,radial)) * smoothstep(0.52,0.90,radial);
-      float sheet = pow(0.5 + 0.5 * sin(crease * 2.7 + z * 7.0 + time * 0.3), 5.0);
-      vec3 sheetColor = palette(warp.x * 0.20 + warp.y * 0.17 + z * 0.35 + crease * 0.16 + time * 0.018);
-      color += shellMask * (sheetColor * (0.07 + sheet * 1.35) + vec3(0.9,1.0,1.0) * reflection * 2.0);
-      float coolReflection = pow(max(0.0, dot(direction, normalize(vec2(-0.7,0.7)))), 12.0);
-      float glossFold = pow(0.5 + 0.5 * sin(crease * 2.7 + z * 7.0 + time * 0.3 + 1.1), 8.0);
-      color += vec3(0.72,0.96,1.0) * shellMask * coolReflection * (0.5 + glossFold) * 3.0;
-      color += vec3(0.14,0.002,0.008) * shellMask * (1.0-sheet) * 0.24;
-      vec3 auroraTint = mix(edgeColor, vec3(0.75,0.9,1.0), 0.30);
-      color += auroraTint * aurora * 2.2;
-      color += mix(edgeColor, vec3(1.0), 0.75) * haloBand * arcLight * exterior * snare * 0.85;
-      color += mix(palette(time * 0.025 + 0.08), vec3(0.80,0.93,1.0),0.55) * tail * 2.0;
-      // Tonal notes illuminate moving stars and short lightning links inside the hollow ring.
-      float melody = clamp(treble, 0.0, 1.0);
-      float inside = 1.0 - smoothstep(contour - thickness - 0.012, contour - thickness - 0.005, length(p));
-      vec3 stars = vec3(0.0);
-      if (melody > 0.003) {
-      for (int i = 0; i < 7; i++) {
-        float index = float(i);
-        vec2 star = starPoints[i];
-        vec2 next = starPoints[i + 1];
-        float sparkle = 0.6 + 0.4 * sin(index * 2.7 + energy * 13.0 + time * 2.0);
-        float dotGlow = exp(-length(p - star) * 450.0);
-        vec2 normal = normalize(vec2(-(next - star).y, (next - star).x));
-        vec2 joint = mix(star, next, 0.48) + normal * sin(index * 7.0 + time * 18.0) * 0.009 * melody;
-        float bolt = min(segmentDistance(p, star, joint), segmentDistance(p, joint, next));
-        float form = smoothstep(0.0, 0.22, 1.0 - melody);
-        float link = exp(-bolt * 1000.0) * form * (0.15 + melody * 0.5);
-        vec3 tint = mix(palette(index / 7.0 + time * 0.025), vec3(0.7, 1.0, 0.9), 0.65);
-        stars += tint * (dotGlow * (1.5 + sparkle) + link) * melody;
-      }
-      }
-      color += stars * inside;
+      float inside = 1.0 - smoothstep(0.94, 1.0, radial);
+      // Two broad twisting lobes sweep from one bright nucleus to the sphere edge.
+      // Polar folds avoid the parallel sine-wave ladder of the previous interior.
+      vec2 nucleusPosition = vec2(sin(melodyTime * 0.63), cos(melodyTime * 0.47)) * 0.065;
+      vec2 v = q - nucleusPosition;
+      float r = length(v);
+      float theta = atan(v.y, v.x);
+      float twist = theta - melodyTime * 0.55 + r * 2.1
+                  + sin(r * 3.4 - melodyTime * 0.42) * 0.55;
+      float liquidFold = sin(twist + sin(theta + melodyTime * 0.27) * r * 0.65);
+      float width = 0.16 + 0.32 * r * r;
+      float sheet = exp(-pow(liquidFold / width, 2.0));
+      float veil = exp(-pow((liquidFold - 0.22) / (width * 1.8), 2.0)) * 0.30;
+      float edgeFold = exp(-abs(liquidFold) / 0.065) * 0.12;
+      vec3 tint = mix(vec3(0.10,0.32,1.0), vec3(1.0,0.055,0.47),
+                      0.5 + 0.5 * sin(twist + r * 1.8 + melodyTime * 0.18));
+      vec3 liquid = tint * (sheet * 1.2 + veil + edgeFold);
+      float hot = pow(sheet, 3.0) * (0.5 + 0.5 * sin(twist + 0.8));
+      liquid += vec3(0.70,0.85,1.0) * hot * 1.15;
+      float nucleus = exp(-r * 24.0);
+      liquid += vec3(1.0,0.62,0.86) * nucleus * 2.8;
+      float innerRim = exp(-abs(radial - 0.965) * 65.0);
+      liquid += mix(vec3(0.22,0.32,1.0),vec3(1.0,0.28,0.58),
+                    0.5 + 0.5 * sin(theta + melodyTime * 0.3)) * innerRim * 0.6;
+      color += liquid * inside * melody;
       color = vec3(1.0) - exp(-color * 1.35);
       gl_FragColor = vec4(color,1.0);
     }
@@ -400,7 +413,7 @@ class MelodyOnsetDetector {
       mid: gl.getUniformLocation(program, 'mid'),
       treble: gl.getUniformLocation(program, 'treble'),
       energy: gl.getUniformLocation(program, 'energy'),
-      stars: gl.getUniformLocation(program, 'starPoints[0]'),
+      melodyTime: gl.getUniformLocation(program, 'melodyTime'),
     };
 
     gl.clearColor(0, 0, 0, 1);
@@ -450,6 +463,7 @@ class MelodyOnsetDetector {
   const snareDetector = new SnareOnsetDetector();
   const melodyDetector = new MelodyOnsetDetector();
   const tempo = new BeatTempoEstimator();
+  const melodyMotion = new MelodyFlowMotion();
   let melodySeed = 0;
   let melodyPulse = 0;
   let snarePulse = 0;
@@ -461,6 +475,8 @@ class MelodyOnsetDetector {
     snareDetector.reset();
     melodyDetector.reset();
     tempo.reset();
+    melodyMotion.reset();
+    lastPulseFrame = 0;
     melodyPulse = 0;
     snarePulse = 0;
     pulse = 0;
@@ -477,6 +493,7 @@ class MelodyOnsetDetector {
     pulse *= Math.exp(-dt / 150);
     snarePulse *= Math.exp(-dt / 95);
     melodyPulse *= Math.exp(-dt / 220);
+    let tonalHit = 0;
     if (!audio.paused && source && audioContext) {
       if (!kickAnalyser) {
         // Independent, unsmoothed FFT: visual smoothing must not hide kick attacks.
@@ -493,11 +510,13 @@ class MelodyOnsetDetector {
       const snareHit = snareDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
       if (snareHit) snarePulse = Math.max(snarePulse, snareHit);
       const melodyHit = melodyDetector.update(kickSpectrum, audioContext.sampleRate, now, window.sinestesiaDetectionSettings);
+      tonalHit = melodyHit;
       if (melodyHit) { melodyPulse = 1; melodySeed += 1.618; }
     }
-    window.sinestesiaKickReadout = { pulse, snare: snarePulse, melody: melodyPulse, melodyHz: melodyPulse > 0.05 ? melodyDetector.peakHz : 0, hz: pulse > 0.05 ? kickDetector.peakHz : 0, bpm: tempo.bpm, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
+    melodyMotion.update(dt, now, tonalHit, !audio.paused);
+    window.sinestesiaKickReadout = { melodySpeed: melodyMotion.speed, melodyPhase: melodyMotion.phase, pulse, snare: snarePulse, melody: melodyPulse, melodyHz: melodyPulse > 0.05 ? melodyDetector.peakHz : 0, hz: pulse > 0.05 ? kickDetector.peakHz : 0, bpm: tempo.bpm, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
     const gain = Number(document.getElementById('fluidIntensity').value) || 1.35;
-    return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35), melody: Math.min(1, melodyPulse * gain / 1.35), note: melodySeed + Math.min(1, melodyDetector.peakHz / 8000) };
+    return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35), melody: Math.min(1, melodyMotion.level * gain / 1.35), motion: melodyMotion.phase, note: melodySeed + Math.min(1, melodyDetector.peakHz / 8000) };
   }
 
   let visualKick = 0, visualSnare = 0, visualLast = 0;
@@ -544,20 +563,23 @@ class MelodyOnsetDetector {
       ctx.save();
       ctx.beginPath(); ctx.arc(width / 2, height * 0.43, radius - height * 0.015, 0, Math.PI * 2); ctx.clip();
       ctx.globalAlpha = signal.melody;
-      const stars = Array.from({ length: 7 }, (_, i) => {
-        const angle = i * 2.39996 + Math.sin(contourClock * 0.35 + i) * 0.18 + signal.note * 1.8;
-        const orbit = radius * (0.22 + 0.36 * (0.5 + 0.5 * Math.sin(i * 8.7 + signal.note * 3.0)));
-        return { x: width / 2 + Math.cos(angle) * orbit, y: height * 0.43 + Math.sin(angle) * orbit };
-      });
-      ctx.strokeStyle = `hsl(${(contourClock * 4 + signal.note * 30) % 360} 85% 80%)`; ctx.lineWidth = 1;
-      stars.forEach((star, i) => {
-        const next = stars[(i + 1) % stars.length];
-        ctx.beginPath(); ctx.moveTo(star.x, star.y);
-        ctx.lineTo((star.x + next.x) / 2 + Math.sin(i * 7 + contourClock * 18) * signal.melody * 4, (star.y + next.y) / 2);
-        ctx.lineTo(next.x, next.y); ctx.stroke();
-        ctx.fillStyle = '#d5ffed'; ctx.beginPath();
-        ctx.arc(star.x, star.y, 1.5 + signal.melody * 2, 0, Math.PI * 2); ctx.fill();
-      });
+      ctx.globalCompositeOperation = 'lighter';
+      for (let band = 0; band < 3; band++) {
+        const phase = band * Math.PI * 2 / 3;
+        ctx.beginPath();
+        for (let i = 0; i <= 100; i++) {
+          const r = i / 100;
+          const angle = phase + signal.motion * 0.55 - r * 2.1
+            - Math.sin(r * 3.4 - signal.motion * 0.42) * 0.55;
+          const px = width / 2 + Math.cos(angle) * radius * r;
+          const py = height * 0.43 + Math.sin(angle) * radius * r;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.strokeStyle = ['#ff42bb', '#598bff', '#b85cff'][band];
+        ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = radius * 0.14;
+        ctx.lineWidth = radius * (0.045 + signal.melody * 0.08); ctx.stroke();
+        ctx.strokeStyle = '#c9d4ff'; ctx.lineWidth *= 0.35; ctx.stroke();
+      }
       ctx.restore();
     }
     ctx.restore();
@@ -623,16 +645,7 @@ class MelodyOnsetDetector {
     gl.uniform1f(locations.mid, signal.mid);
     gl.uniform1f(locations.treble, signal.treble);
     gl.uniform1f(locations.energy, signal.energy);
-    const points = new Float32Array(16);
-    for (let i = 0; i < 8; i++) {
-      const index = i % 7;
-      const t = contourClock * getColorSpeed() * 0.5;
-      const angle = index * 2.39996 + Math.sin(t * 0.9 + index + signal.energy) * 0.45 + signal.energy * 1.8;
-      const orbit = (0.055 + 0.12 * (0.5 + 0.5 * Math.sin(index * 8.7 + signal.energy * 3.0))) * (0.65 + 0.35 * (1 - signal.treble));
-      points[i * 2] = Math.cos(angle) * orbit + Math.sin(t * 0.6 + index * 2) * 0.014;
-      points[i * 2 + 1] = Math.sin(angle) * orbit + Math.cos(t * 0.5 + index) * 0.014;
-    }
-    gl.uniform2fv(locations.stars, points);
+    gl.uniform1f(locations.melodyTime, percussion.motion);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   };
 

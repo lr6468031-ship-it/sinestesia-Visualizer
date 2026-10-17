@@ -571,7 +571,16 @@ function drawIdle(width, height) {
   drawAurora(width, height, 0.06, palette);
 }
 
+let lastSeparationFrame = 0;
 function render() {
+  if (window.sinestesiaSeparating) {
+    const now = performance.now();
+    if (now - lastSeparationFrame < 100) {
+      animationFrame = requestAnimationFrame(render);
+      return;
+    }
+    lastSeparationFrame = now;
+  }
   const { width, height } = resizeCanvas();
 
   if (!analyser || audio.paused) {

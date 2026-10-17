@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <title>Sinestesia Visualizer</title>
-  <link rel="stylesheet" href="styles.css?v=20261017-charge1" />
-  <link rel="stylesheet" href="controls.css?v=20261017-charge1" />
+  <link rel="stylesheet" href="styles.css?v=20261017-melodyflow1" />
+  <link rel="stylesheet" href="controls.css?v=20261017-melodyflow1" />
 </head>
 <body>
   <main class="app">
@@ -94,18 +94,18 @@
             <label class="melody-setting"><strong>Tolerancia Y · melodía</strong><span>±dB <output id="melodyToleranceValue">40</output></span><input id="melodyTolerance" type="range" min="5" max="50" step="1" value="40" aria-label="Tolerancia de nivel para melodía" /></label>
             <label class="melody-setting"><strong>Amplitud del rango melódico</strong><span id="melodyWidthLabel">2 octavas</span><input id="melodyWidth" type="range" min="0.5" max="4" step="0.25" value="2" aria-label="Anchura del rango melódico en octavas" /></label>
           </div>
-          <p class="spectrum-help">K = expansión del aro. S = aurora. M = constelación de notas dentro del aro; mueve M y ajusta la amplitud para elegir el rango. Busca ataques tonales de piano, sintetizadores u otros instrumentos; no identifica el instrumento con certeza. El snare combina el cuerpo elegido con ataque en 2–6 kHz. Aumenta sensibilidad si pierde golpes; bájala si responde de más. Flechas izquierda/derecha: frecuencia. Arriba/abajo: nivel. Ajusta la tolerancia Y para estrechar la ventana de volumen. BPM es una estimación y puede indicar la mitad o el doble del tempo.</p>
+          <p class="spectrum-help">K = expansión del aro. S = aurora. M = plasma fluido dentro del aro; mueve M y ajusta la amplitud para elegir el rango. Busca ataques tonales de piano, sintetizadores u otros instrumentos; no identifica el instrumento con certeza. El snare combina el cuerpo elegido con ataque en 2–6 kHz. Aumenta sensibilidad si pierde golpes; bájala si responde de más. Flechas izquierda/derecha: frecuencia. Arriba/abajo: nivel. Ajusta la tolerancia Y para estrechar la ventana de volumen. BPM es una estimación y puede indicar la mitad o el doble del tempo.</p>
           <button id="spectrumReset" type="button" class="spectrum-reset">Restaurar detección</button>
         </div>
       </section>
 
       <section id="separationEditor" class="spectrum-card separator-card" aria-label="Separación de instrumentos con inteligencia artificial">
         <h2 class="spectrum-title">Separar instrumentos · IA</h2>
-        <p class="spectrum-help">Demucs separa voz, batería, bajo y resto melódico. La canción se procesa en tu dispositivo: no se sube. Descarga inicial del modelo: unos 174 MB. Empieza con un fragmento corto; en móvil puede tardar y usar mucha memoria.</p>
+        <p class="spectrum-help">Demucs separa voz, batería, bajo y resto melódico. La canción se procesa en tu dispositivo: no se sube. Descarga inicial del modelo: unos 174 MB. Trabaja por fragmentos, no en tiempo real. Puedes seguir escuchando mientras se prepara; las pistas aparecerán aquí debajo. En móvil puede tardar y usar mucha memoria.</p>
         <div class="separation-options">
           <label>Motor IA <select id="separateEngine"><option value="auto">Automático · GPU o CPU</option><option value="cpu">CPU compatible · sin WebGPU</option></select></label>
           <label>Inicio · segundos <input id="separateFrom" type="number" min="0" step="1" value="0" /></label>
-          <label>Fragmento <select id="separateDuration"><option value="15">15 segundos</option><option value="30" selected>30 segundos</option><option value="60">60 segundos</option><option value="full">Hasta 5 minutos</option></select></label>
+          <label>Fragmento <select id="separateDuration"><option value="15" selected>15 segundos</option><option value="30">30 segundos</option><option value="60">60 segundos</option><option value="full">Hasta 5 minutos</option></select></label>
         </div>
         <div class="separation-actions"><button id="separateChoose" type="button">Cargar canción</button><button id="separateStart" type="button" disabled>Separar con IA</button><button id="separateCancel" type="button" disabled>Cancelar</button><button id="separateJump" type="button" hidden>Ver pistas separadas</button><button id="separateOriginal" type="button" hidden>Escuchar original</button></div>
         <progress id="separateProgress" max="1" hidden aria-label="Progreso de separación"></progress>
@@ -127,7 +127,7 @@
       <div class="detection-card" aria-live="polite">
         <span>Ritmo y notas</span>
         <strong id="instrumentValue">Sin señal</strong>
-        <small>Kick: expansión grave. Snare: aurora exterior. Melodía: puntos y rayos dentro del aro. Detección aproximada por ataque y espectro.</small>
+        <small>Kick: expansión grave. Snare: aurora exterior. Melodía: plasma fluido cuya velocidad sigue los ataques tonales. Detección aproximada por ataque y espectro.</small>
         <small id="melodyActivity" aria-live="off">Melodía · sin notas detectadas</small>
       </div>
     </section>
@@ -135,12 +135,12 @@
     <audio id="audio" preload="metadata"></audio>
   </main>
 
-  <script src="app.js?v=20261017-charge1"></script>
-  <script src="plasma-visualizer.js?v=20261017-charge1"></script>
-  <script src="plasma-ultra-tuning.js?v=20261017-charge1"></script>
-  <script src="visual-intensity.js?v=20261017-charge1"></script>
-  <script src="plasma-webgl.js?v=20261017-charge1"></script>
-  <script src="controls.js?v=20261017-charge1"></script>
-  <script type="module" src="separation.js?v=20261017-charge1"></script>
+  <script src="app.js?v=20261017-melodyflow1"></script>
+  <script src="plasma-visualizer.js?v=20261017-melodyflow1"></script>
+  <script src="plasma-ultra-tuning.js?v=20261017-melodyflow1"></script>
+  <script src="visual-intensity.js?v=20261017-melodyflow1"></script>
+  <script src="plasma-webgl.js?v=20261017-melodyflow1"></script>
+  <script src="controls.js?v=20261017-melodyflow1"></script>
+  <script type="module" src="separation.js?v=20261017-melodyflow1"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 import * as ort from 'onnxruntime-web/webgpu';
 import { separateTracks } from './vendor/demucs/apply.js';
 import { chooseSeparationBackend, runSeparationWithFallback } from './separation-runtime.js';
-import { splitDrumBands } from './separation-dsp.js';
+import { splitDrumBands, encodeWav } from './separation-dsp.js';
 ort.env.wasm.numThreads = 1; // Works on GitHub Pages without COOP/COEP headers.
 ort.env.wasm.proxy = false;
 ort.env.wasm.wasmPaths = new URL('./', self.location.href).href;
@@ -49,7 +49,7 @@ self.onmessage = async event => {
     const backend = await chooseSeparationBackend(navigator.gpu, event.data.engine);
     status(backend === 'webgpu' ? 'Preparando IA en GPU…' : 'Preparando IA en CPU compatible. No requiere los bloques grandes de WebGPU; puede tardar varios minutos…');
     const { channelData } = event.data;
-    const tracks = await runSeparationWithFallback({
+    let tracks = await runSeparationWithFallback({
       backend,
       createSession: provider => ort.InferenceSession.create(modelBytes, { executionProviders:[provider], enableCpuMemArena:false, enableMemPattern:false }),
       onFallback: () => status('La GPU no pudo ejecutar el modelo. Reiniciando automáticamente en CPU compatible…'),
@@ -58,8 +58,23 @@ self.onmessage = async event => {
     status('Preparando pistas y bandas estimadas de batería…');
     const bands = splitDrumBands(tracks.drums.channelData, 44100);
     for (const [name, channelData] of Object.entries(bands)) tracks[name] = { channelData, sampleRate:44100 };
-    const transfers = [...new Set(Object.values(tracks).flatMap(track => track.channelData.map(channel => channel.buffer)))];
-    postMessage({ type:'done', tracks }, transfers);
+    const wavs = {};
+    const expectedLength = channelData[0].length;
+    // Validation and WAV encoding stay off the UI thread, and each encoded track
+    // releases its reference before the next one is prepared.
+    for (const name of Object.keys(tracks)) {
+      const track = tracks[name];
+      if (track.sampleRate !== 44100 || track.channelData?.length !== 2
+          || track.channelData.some(channel => channel.length !== expectedLength)) throw Error('La IA devolvió una pista incompleta.');
+      for (const channel of track.channelData) for (const sample of channel) {
+        if (!Number.isFinite(sample)) throw Error('La IA devolvió audio inválido.');
+      }
+      status(`Preparando audio: ${name}…`);
+      wavs[name] = encodeWav(track.channelData, 44100);
+      delete tracks[name];
+    }
+    tracks = null;
+    postMessage({ type:'done', wavs });
   } catch (error) { postMessage({ type:'error', text: error?.message || String(error) }); }
 
 };
