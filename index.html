@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <title>Sinestesia Visualizer</title>
-  <link rel="stylesheet" href="styles.css?v=20261017-fluid1" />
-  <link rel="stylesheet" href="controls.css?v=20261017-fluid1" />
+  <link rel="stylesheet" href="styles.css?v=20261017-results1" />
+  <link rel="stylesheet" href="controls.css?v=20261017-results1" />
 </head>
 <body>
   <main class="app">
@@ -106,10 +106,14 @@
           <label>Inicio · segundos <input id="separateFrom" type="number" min="0" step="1" value="0" /></label>
           <label>Fragmento <select id="separateDuration"><option value="15">15 segundos</option><option value="30" selected>30 segundos</option><option value="60">60 segundos</option><option value="full">Hasta 5 minutos</option></select></label>
         </div>
-        <div class="separation-actions"><button id="separateChoose" type="button">Cargar canción</button><button id="separateStart" type="button" disabled>Separar con IA</button><button id="separateCancel" type="button" disabled>Cancelar</button><button id="separateOriginal" type="button" hidden>Escuchar original</button></div>
+        <div class="separation-actions"><button id="separateChoose" type="button">Cargar canción</button><button id="separateStart" type="button" disabled>Separar con IA</button><button id="separateCancel" type="button" disabled>Cancelar</button><button id="separateJump" type="button" hidden>Ver pistas separadas</button><button id="separateOriginal" type="button" hidden>Escuchar original</button></div>
         <progress id="separateProgress" max="1" hidden aria-label="Progreso de separación"></progress>
         <p id="separateStatus" class="spectrum-help" role="status">Primero carga una canción.</p>
-        <div id="separateResults" aria-label="Pistas separadas"></div>
+        <section id="separateOutput" class="separate-output" hidden tabindex="-1" aria-labelledby="separateOutputTitle">
+          <h3 id="separateOutputTitle">Tus pistas separadas · 7 cuadrículas</h3>
+          <p class="spectrum-help">Pulsa Escuchar en cualquier cuadrícula: la pista suena aquí mismo y el aro la analiza. Usa WAV para descargarla.</p>
+          <div id="separateResults" aria-label="Pistas separadas"></div>
+        </section>
         <p class="spectrum-help">Kick, snare y platillos se ofrecen como bandas estimadas de la batería. Piano y sintetizadores permanecen en «Otros»; los vocal chops pueden quedar en voz u otros. No se aíslan todos los instrumentos por separado. Modelo para uso personal e investigación. <a href="THIRD_PARTY.md">Modelos, licencias y límites</a>.</p>
       </section>
 
@@ -130,12 +134,12 @@
     <audio id="audio" preload="metadata"></audio>
   </main>
 
-  <script src="app.js?v=20261017-fluid1"></script>
-  <script src="plasma-visualizer.js?v=20261017-fluid1"></script>
-  <script src="plasma-ultra-tuning.js?v=20261017-fluid1"></script>
-  <script src="visual-intensity.js?v=20261017-fluid1"></script>
-  <script src="plasma-webgl.js?v=20261017-fluid1"></script>
-  <script src="controls.js?v=20261017-fluid1"></script>
-  <script type="module" src="separation.js?v=20261017-fluid1"></script>
+  <script src="app.js?v=20261017-results1"></script>
+  <script src="plasma-visualizer.js?v=20261017-results1"></script>
+  <script src="plasma-ultra-tuning.js?v=20261017-results1"></script>
+  <script src="visual-intensity.js?v=20261017-results1"></script>
+  <script src="plasma-webgl.js?v=20261017-results1"></script>
+  <script src="controls.js?v=20261017-results1"></script>
+  <script type="module" src="separation.js?v=20261017-results1"></script>
 </body>
 </html>

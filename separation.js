@@ -1,17 +1,19 @@
-import { encodeWav } from './separation-dsp.js?v=20261017-stems1';
+import { encodeWav } from './separation-dsp.js?v=20261017-results1';
 (() => {
   const input = document.getElementById('audioFile'), player = document.getElementById('audio');
   const start = document.getElementById('separateStart'), cancel = document.getElementById('separateCancel');
   const progress = document.getElementById('separateProgress'), message = document.getElementById('separateStatus');
   const results = document.getElementById('separateResults'), original = document.getElementById('separateOriginal');
+  const output = document.getElementById('separateOutput'), jump = document.getElementById('separateJump');
+  jump.addEventListener('click',()=>{output.scrollIntoView({behavior:'smooth',block:'start'});output.focus({preventScroll:true});});
   const duration = document.getElementById('separateDuration'), from = document.getElementById('separateFrom');
   const labels = { drums:'Batería · IA',bass:'Bajo · IA',other:'Otros / melodía · IA',vocals:'Voz · IA',kickEstimate:'Kick · banda estimada',snareEstimate:'Snare · banda estimada',cymbalEstimate:'Platillos · banda estimada' };
   let worker = null, generation = 0, urls = [], originalUrl = null, selected = null, selectedFile = null;
   const stop = text => { generation++; worker?.terminate(); worker=null; start.disabled=!input.files?.length; cancel.disabled=true; duration.disabled=false; from.disabled=false; progress.hidden=true; if(text)message.textContent=text; };
-  function release() { urls.forEach(URL.revokeObjectURL);urls=[];if(originalUrl)URL.revokeObjectURL(originalUrl);originalUrl=null;results.replaceChildren();original.hidden=true;selected=null; }
+  function release() { urls.forEach(URL.revokeObjectURL);urls=[];if(originalUrl)URL.revokeObjectURL(originalUrl);originalUrl=null;results.replaceChildren();output.hidden=true;jump.hidden=true;original.hidden=true;selected=null; }
   input.addEventListener('change', () => { stop();release();selectedFile=input.files?.[0]||null;start.disabled=!selectedFile;message.textContent=selectedFile?'Lista para separar. Se procesa en este dispositivo; la canción no se sube.':'Primero carga una canción.'; });
   document.getElementById('separateChoose').addEventListener('click',()=>input.click());
-  cancel.addEventListener('click',()=>stop('Proceso cancelado. Puedes volver a intentarlo.'));
+  cancel.addEventListener('click',()=>{stop('Proceso cancelado. Puedes volver a intentarlo.');release();});
   const updateTrack = () => { if(!selected)return;document.getElementById('trackName').textContent=selected;document.getElementById('compactTrack').textContent=selected;document.getElementById('status').textContent=`Reproduciendo: ${selected}`; };
   player.addEventListener('play',updateTrack);
   async function listen(url,label) {
@@ -36,9 +38,10 @@ import { encodeWav } from './separation-dsp.js?v=20261017-stems1';
       const channelData=[decoded.getChannelData(0).slice(begin,end),decoded.getChannelData(Math.min(1,decoded.numberOfChannels-1)).slice(begin,end)];
       if(!channelData[0].length)throw Error('El fragmento está vacío.');
       originalUrl=URL.createObjectURL(file);original.hidden=false;
-      worker=new Worker(new URL('./separator-assets/worker.js?v=1',import.meta.url),{type:'module'});
+      worker=new Worker(new URL('./separator-assets/worker.js?v=results1',import.meta.url),{type:'module'});
       worker.onerror=()=>{if(token===generation)stop('No se pudo iniciar la IA. Recarga la página o prueba un navegador actualizado.');};
-      worker.onmessage=event=>{
+      worker.onmessageerror=()=>{if(token===generation)stop('No se pudieron recibir las pistas. Prueba un fragmento de 15 segundos.');};
+      worker.onmessage=async event=>{
         if(token!==generation)return;
         const data=event.data;
         if(data.type==='status'){message.textContent=data.text;progress.removeAttribute('value');}
@@ -46,19 +49,41 @@ import { encodeWav } from './separation-dsp.js?v=20261017-stems1';
         if(data.type==='progress'){progress.value=data.step/data.total;message.textContent=`Separando fragmento de ${seconds.toFixed(1)} s · segmento ${data.step}/${data.total}. Puedes cancelar.`;}
         if(data.type==='error'){stop(`No se pudo separar: ${data.text} Prueba un fragmento más corto o un ordenador.`);return;}
         if(data.type==='done'){
+          // Release the model before WAV encoding to avoid retaining its memory on phones.
+          worker?.terminate();worker=null;
           try {
-            for(const [name,track] of Object.entries(data.tracks)){
-              if(!labels[name]||track.channelData.length!==2||track.channelData[0].length!==end-begin)throw Error('La IA devolvió una pista incompleta.');
+            const names=Object.keys(labels);
+            if(!data.tracks || names.some(name=>!data.tracks[name]))throw Error('La separación no devolvió todas las pistas. No se marcará como terminada.');
+            message.textContent='Preparando las cuadrículas y los WAV…';
+            progress.value=0;
+            const pending=document.createDocumentFragment();
+            for(const [index,name] of names.entries()){
+              if(token!==generation)return;
+              const track=data.tracks[name];
+              if(track.sampleRate!==44100||track.channelData?.length!==2||track.channelData.some(c=>!(c instanceof Float32Array)||c.length!==end-begin))throw Error('La IA devolvió una pista incompleta.');
               for(const channel of track.channelData)for(const sample of channel)if(!Number.isFinite(sample))throw Error('La IA devolvió audio inválido.');
               const blob=encodeWav(track.channelData,44100),url=URL.createObjectURL(blob);urls.push(url);
-              const row=document.createElement('div');row.className='stem-row';
-              const title=document.createElement('strong');title.textContent=labels[name];
-              const button=document.createElement('button');button.type='button';button.textContent='Escuchar';button.addEventListener('click',()=>listen(url,`${file.name} · ${labels[name]}`));
-              const link=document.createElement('a');link.href=url;link.download=`${file.name.replace(/\.[^.]+$/,'')}_${offset}s_${name}.wav`;link.textContent='WAV';
-              row.append(title,button,link);results.append(row);
+              const row=document.createElement('article');row.className='stem-row';row.dataset.stem=name;
+              const title=document.createElement('h4');title.textContent=labels[name];
+              const description=document.createElement('p');description.className='stem-description';description.textContent=`${seconds.toFixed(1)} s · ${name.endsWith('Estimate')?'Banda aproximada de batería':'Pista separada con IA'}`;
+              const button=document.createElement('button');button.type='button';button.textContent='▶ Escuchar';button.setAttribute('aria-label',`Escuchar ${labels[name]}`);button.addEventListener('click',()=>{
+                results.querySelectorAll('article').forEach(card=>card.classList.remove('is-playing'));
+                row.classList.add('is-playing');listen(url,`${file.name} · ${labels[name]}`);
+              });
+              const link=document.createElement('a');link.href=url;link.download=`${file.name.replace(/\.[^.]+$/,'')}_${offset}s_${name}.wav`;link.textContent='↓ WAV';link.setAttribute('aria-label',`Descargar ${labels[name]}`);
+              row.append(title,description,button,link);pending.append(row);
+              progress.value=(index+1)/names.length;
+              message.textContent=`Preparando pistas ${index+1}/${names.length}…`;
+              await new Promise(resolve=>setTimeout(resolve,0));
             }
-            stop(`Listo: 4 pistas IA y 3 bandas estimadas de batería. Fragmento ${offset.toFixed(1)}–${(offset+seconds).toFixed(1)} s. Escuchar una pista hace que el visualizador analice esa pista.`);
-          }catch(error){results.replaceChildren();stop(error.message);}
+            if(token!==generation)return;
+            results.replaceChildren(pending);output.hidden=false;jump.hidden=false;
+            stop(`Separación terminada: ${names.length} cuadrículas listas abajo. 4 pistas IA y 3 bandas estimadas. Fragmento ${offset.toFixed(1)}–${(offset+seconds).toFixed(1)} s.`);
+            output.scrollIntoView({behavior:'smooth',block:'start'});output.focus({preventScroll:true});
+          }catch(error){
+            if(token!==generation)return;
+            release();stop(`No se pudieron preparar las pistas: ${error.message} Prueba un fragmento de 15 segundos.`);
+          }
         }
       };
       worker.postMessage({type:'separate',channelData},channelData.map(c=>c.buffer));
