@@ -1,3 +1,45 @@
+// Adaptive kick onset detection, restricted to low frequencies (30–160 Hz).
+// A transient detector, not source separation: bass plucks can resemble a kick.
+class KickOnsetDetector {
+  constructor() { this.reset(); }
+  reset() {
+    this.previous = 0;
+    this.peakHz = 0;
+    this.baseline = 0;
+    this.fluxMean = 0;
+    this.lastTime = null;
+    this.started = null;
+    this.lastHit = -Infinity;
+  }
+  update(spectrum, sampleRate, now) {
+    const binHz = sampleRate / (spectrum.length * 2);
+    let body = 0, support = 0, peak = 0, peakHz = 0;
+    for (let i = Math.ceil(30 / binHz); i * binHz <= 160; i++) {
+      const power = Math.pow(10, spectrum[i] / 10);
+      if (i * binHz <= 90) {
+        body += power;
+        if (power > peak) { peak = power; peakHz = i * binHz; }
+      }
+      else support += power;
+    }
+    // Main weight on the fundamental (including 43–80 Hz), not mid/high clicks.
+    const energy = body + support * 0.15;
+    if (this.started === null) this.started = now;
+    const dt = this.lastTime === null ? 24 : Math.max(1, Math.min(100, now - this.lastTime));
+    const flux = Math.max(0, energy - this.previous);
+    const hit = now - this.started >= 100 && now - this.lastHit >= 170
+      && body > 1e-6 && energy > this.baseline * 1.65
+      && flux > Math.max(1e-6, this.fluxMean * 2.5, this.previous * 0.3);
+    const strength = hit ? Math.min(1, 0.55 + flux / Math.max(energy, 1e-6) * 0.45) : 0;
+    if (hit) { this.lastHit = now; this.peakHz = peakHz; }
+    this.baseline += (energy - this.baseline) * (1 - Math.exp(-dt / 450));
+    this.fluxMean += (flux - this.fluxMean) * (1 - Math.exp(-dt / 600));
+    this.previous = energy;
+    this.lastTime = now;
+    return strength;
+  }
+}
+
 // WebGL plasma fallback for Sinestesia Visualizer.
 // Performance-tuned for mobile while preserving the electric organic look.
 (() => {
@@ -103,50 +145,18 @@
     void main() {
       vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
       p.y -= 0.07;
-      float t = time * 0.32;
-      float b = clamp(bass, 0.0, 1.0);
-      float m = clamp(mid, 0.0, 1.0);
-      float h = clamp(treble, 0.0, 1.0);
-      float activity = max(b, max(m,h));
-      float radius = 0.255 + b * 0.033;
-      vec2 q = p / radius;
-      float a = atan(q.y, q.x);
-      float deformation = b * 0.06 * sin(a * 3.0 + t)
-                        + m * 0.035 * sin(a * 5.0 - t * 1.3)
-                        + h * 0.012 * sin(a * 9.0 + t);
-      float r = length(q) / (1.0 + deformation);
-      float mask = 1.0 - smoothstep(0.995, 1.015, r);
-      float z = sqrt(max(0.0, 1.0 - min(r*r, 1.0)));
-      // Project the flow onto a curved surface rather than drawing flat contour lines.
-      vec3 n = normalize(vec3(q, z * 1.1));
-      vec2 sphere = vec2(atan(n.x, max(0.001,n.z)), asin(clamp(n.y,-1.0,1.0)));
-      vec2 flow = sphere;
-      flow += vec2(sin(sphere.y * 2.9 + t), cos(sphere.x * 2.5 - t * 0.8)) * 0.36;
-      flow += vec2(sin(flow.y * 4.0 - t * 0.5), sin(flow.x * 3.5 + t * 0.6)) * 0.14;
-      float field = flow.x * 1.7 + flow.y * 1.3 + sin(flow.y * 3.0 - t) * 0.65;
-      vec3 magenta = vec3(1.0, 0.035, 0.38);
-      vec3 cyan = vec3(0.025, 0.55, 1.0);
-      vec3 gold = vec3(1.0, 0.46, 0.025);
-      // Wide flowing sheets and narrow hot ridges share the same field.
-      float waveB = 0.5 + 0.5 * sin(field * 3.0 + t);
-      float waveM = 0.5 + 0.5 * sin(field * 3.0 + t + 2.1);
-      float waveH = 0.5 + 0.5 * sin(field * 3.0 + t + 4.2);
-      vec3 sheets = magenta*b*pow(waveB,4.0) + cyan*m*pow(waveM,4.0) + gold*h*pow(waveH,4.0);
-      vec3 ridges = magenta*b*pow(waveB,24.0) + cyan*m*pow(waveM,24.0) + gold*h*pow(waveH,24.0);
-      float rim = pow(1.0-z, 3.2);
-      float lighting = 0.22 + 0.78 * max(0.0,dot(n,normalize(vec3(-0.7,0.5,0.6))));
-      float around = a + sin(a*2.0+t)*0.8 + t*0.4;
-      vec3 edgeColor = magenta*b*(0.5+0.5*sin(around))
-                     + cyan*m*(0.5+0.5*sin(around+2.1))
-                     + gold*h*(0.5+0.5*sin(around+4.2));
-      vec3 color = (sheets * (0.28 + lighting * 0.75) + ridges * 1.2) * (0.25+0.75*z);
-      color += edgeColor * rim * 2.8;
-      color *= mask;
-      float edge = exp(-abs(r-1.0)*65.0);
-      float bloom = exp(-abs(r-1.0)*14.0);
-      color += edgeColor * (edge * 1.2 + bloom * 0.2);
-      // A dim glass shell remains at rest; the colored light is exclusively audio driven.
-      color += vec3(0.015,0.019,0.03)*edge;
+      float pulse = clamp(bass, 0.0, 1.0);
+      float radius = 0.255 + pulse * 0.055;
+      float a = atan(p.y, p.x);
+      float contour = radius * (1.0 + pulse * 0.035 * sin(a * 3.0));
+      float distanceToEdge = abs(length(p) - contour);
+      float thickness = 0.0018 + pulse * 0.0018;
+      float edge = 1.0 - smoothstep(thickness, thickness + 0.002, distanceToEdge);
+      // No surface, ribbons or inward bloom: the center remains completely black.
+      float exterior = step(contour, length(p));
+      float bloom = exp(-distanceToEdge * 180.0) * exterior;
+      vec3 edgeColor = palette(a / 6.2831853 + 0.5);
+      vec3 color = edgeColor * (edge * (0.5 + pulse * 1.5) + bloom * pulse * 0.35);
       color = vec3(1.0) - exp(-color * 1.35);
       gl_FragColor = vec4(color,1.0);
     }
@@ -240,7 +250,58 @@
     syncVisibility();
   });
 
-  const previousDraw = drawAurora;
+  let kickAnalyser = null;
+  let kickSpectrum = null;
+  const kickDetector = new KickOnsetDetector();
+  let lastPulseFrame = 0;
+  let pulse = 0;
+
+  function resetKick() {
+    kickDetector.reset();
+    pulse = 0;
+  }
+  audio.addEventListener('seeking', resetKick);
+  audio.addEventListener('emptied', resetKick);
+  audio.addEventListener('pause', resetKick);
+
+  function readKickPulse() {
+    const now = performance.now();
+    const dt = Math.min(100, lastPulseFrame ? now - lastPulseFrame : 24);
+    lastPulseFrame = now;
+    pulse *= Math.exp(-dt / 150);
+    if (!audio.paused && source && audioContext) {
+      if (!kickAnalyser) {
+        // Independent, unsmoothed FFT: visual smoothing must not hide kick attacks.
+        kickAnalyser = audioContext.createAnalyser();
+        kickAnalyser.fftSize = 4096;
+        kickAnalyser.smoothingTimeConstant = 0;
+        source.connect(kickAnalyser);
+        kickSpectrum = new Float32Array(kickAnalyser.frequencyBinCount);
+      }
+      kickAnalyser.getFloatFrequencyData(kickSpectrum);
+      const hit = kickDetector.update(kickSpectrum, audioContext.sampleRate, now);
+      if (hit) pulse = Math.max(pulse, hit);
+    }
+    window.sinestesiaKickReadout = { pulse, hz: pulse > 0.05 ? kickDetector.peakHz : 0, level: audio.paused ? 0 : Math.min(1, Math.sqrt(kickDetector.previous)) };
+    const gain = Number(document.getElementById('fluidIntensity').value) || 1.35;
+    return Math.min(1, pulse * gain / 1.35);
+  }
+
+  function drawKickFallback(width, height) {
+    const level = readKickPulse();
+    const radius = height * (0.255 + level * 0.055);
+    const gradient = ctx.createConicGradient(0, width / 2, height * 0.43);
+    ['#08cfff', '#7433ff', '#ff2099', '#073dcc', '#08cfff'].forEach((color, i) => gradient.addColorStop(i / 4, color));
+    ctx.save();
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 1.5 + level * 3;
+    ctx.globalAlpha = 0.5 + level * 0.5;
+    ctx.beginPath();
+    ctx.arc(width / 2, height * 0.43, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   let quality = 0.92;
   let slowFrames = 0;
   let fastFrames = 0;
@@ -248,7 +309,7 @@
 
   drawAurora = function drawPlasmaWebGL(width, height) {
     if (!isActive()) {
-      previousDraw(width, height);
+      drawKickFallback(width, height);
       return;
     }
 
@@ -288,7 +349,7 @@
       surface.height = h;
     }
 
-    const signal = fastBeatSignal();
+    const signal = { bass: readKickPulse(), mid: 0, treble: 0, energy: 0 };
     surface.style.filter = baseCanvas.style.filter;
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT);

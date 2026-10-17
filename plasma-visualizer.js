@@ -373,12 +373,13 @@ function contourFrame(now) {
 
   if (now - contourUI > 150) {
     contourUI = now;
-    bassValue.textContent = Math.round(smoothBass * 100);
-    midValue.textContent = Math.round(smoothMid * 100);
-    trebleValue.textContent = Math.round(smoothTreble * 100);
-    if (instrumentValue) instrumentValue.textContent = 'Fusión · Graves / Medios / Agudos';
+    const kick = window.sinestesiaKickReadout || { pulse: 0, hz: 0, level: 0 };
+    bassValue.textContent = Math.round(kick.pulse * 100);
+    midValue.textContent = kick.hz ? Math.round(kick.hz) : "—";
+    trebleValue.textContent = Math.round(kick.level * 100);
+    if (instrumentValue) instrumentValue.textContent = 'Kick · detección de ataques graves';
     const notice = document.getElementById('visualNotice');
-    if (notice) notice.textContent = 'Magenta: graves · Cian: medios · Dorado: agudos';
+    if (notice) notice.textContent = 'Pulso de kick · 30–160 Hz · énfasis en 43–80 Hz';
   }
 
   animationFrame = requestAnimationFrame(contourFrame);
