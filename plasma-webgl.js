@@ -244,14 +244,17 @@ class MelodyOnsetDetector {
     }
 
     vec3 palette(float t) {
-      // Iridescent liquid: cyan/blue, violet, pink and warm gold from the reference.
-      vec3 blue = vec3(0.015, 0.20, 1.0), cyan = vec3(0.02, 1.0, 0.88);
-      vec3 pink = vec3(1.0, 0.035, 0.50), gold = vec3(1.0, 0.58, 0.015);
-      float x = fract(t) * 4.0;
-      if (x < 1.0) return mix(blue, cyan, smoothstep(0.0,1.0,x));
-      if (x < 2.0) return mix(cyan, pink, smoothstep(1.0,2.0,x));
-      if (x < 3.0) return mix(pink, gold, smoothstep(2.0,3.0,x));
-      return mix(gold, blue, smoothstep(3.0,4.0,x));
+      // Video reference: saturated cobalt/cyan, yellow-gold, orange-red and deep wine.
+      float x = fract(t) * 6.0;
+      vec3 blue=vec3(0.005,0.025,1.0), cyan=vec3(0.01,0.95,1.0);
+      vec3 gold=vec3(1.0,0.94,0.015), orange=vec3(1.0,0.23,0.005);
+      vec3 wine=vec3(0.25,0.002,0.035), violet=vec3(0.26,0.01,0.85);
+      if(x<1.0)return mix(blue,cyan,smoothstep(0.0,1.0,x));
+      if(x<2.0)return mix(cyan,gold,smoothstep(1.0,2.0,x));
+      if(x<3.0)return mix(gold,orange,smoothstep(2.0,3.0,x));
+      if(x<4.0)return mix(orange,wine,smoothstep(3.0,4.0,x));
+      if(x<5.0)return mix(wine,violet,smoothstep(4.0,5.0,x));
+      return mix(violet,blue,smoothstep(5.0,6.0,x));
     }
 
     float segmentDistance(vec2 p, vec2 a, vec2 b) {
@@ -273,11 +276,11 @@ class MelodyOnsetDetector {
       float distanceToEdge = abs(length(p) - contour);
       float snare = clamp(mid, 0.0, 1.0);
       float ribbon = 0.5 + 0.5 * sin(a * 2.0 - time * 0.65 + flow * 5.0);
-      float thickness = 0.005 + pow(ribbon, 2.0) * (0.017 + pulse * 0.012) + snare * 0.002;
+      float thickness = 0.004 + pow(ribbon, 2.0) * (0.020 + pulse * 0.014) + snare * 0.002;
       float edge = 1.0 - smoothstep(thickness, thickness + 0.002, distanceToEdge);
       float exterior = step(contour + thickness, length(p));
       vec3 edgeColor = palette(a / 6.2831853 + time * 0.025 + flow * 0.22);
-      // White turbulence is clipped to the colored stroke, never the black center.
+      // Reflections follow the curved liquid surface rather than a uniform white outline.
       float plasma = noise(direction * 6.0 + vec2(time * 0.55, distanceToEdge * 90.0));
       float core = (1.0 - smoothstep(thickness * 0.12, thickness * 0.63, distanceToEdge))
                  * (0.6 + plasma * 0.7);
@@ -290,7 +293,25 @@ class MelodyOnsetDetector {
       vec3 color = edgeColor * (edge * (1.3 + pulse + snare) + bloom * (0.4 + pulse * 0.5));
       float strand = pow(0.5 + 0.5 * sin(distanceToEdge * 360.0 + flow * 8.0 - time * 1.3), 6.0);
       color += edgeColor * strand * edge * 0.8;
-      color += vec3(1.0, 0.98, 0.94) * core * edge * (0.65 + pulse * 0.8 + snare);
+      vec2 q = p / max(contour, 0.01);
+      float radial = length(q);
+      float z = sqrt(max(0.0, 1.0 - min(1.0, radial * radial)));
+      vec2 warp = q + vec2(sin(q.y * 4.0 + time * 0.48), cos(q.x * 3.0 - time * 0.37)) * (0.13 + pulse * 0.08);
+      float crease = sin(warp.x * 4.0 + warp.y * 2.0 + flow * 5.0 - time * 0.32);
+      vec3 normal = normalize(vec3(warp + direction * crease * 0.10, z * 0.85 + 0.08));
+      vec3 keyLight = normalize(vec3(-0.65, 0.7, 0.8));
+      float reflection = pow(max(0.0, dot(reflect(-keyLight, normal), vec3(0.0,0.0,1.0))), 22.0);
+      float rimReflection = pow(0.5 + 0.5 * sin(a * 2.0 + time * 0.42 + flow * 4.0), 10.0);
+      color += vec3(0.85,0.98,1.0) * core * edge * rimReflection * (1.1 + pulse + snare);
+      // Broad, folded chrome sheets fade out before the central constellation area.
+      float shellMask = (1.0-smoothstep(0.98,1.015,radial)) * smoothstep(0.52,0.90,radial);
+      float sheet = pow(0.5 + 0.5 * sin(crease * 2.7 + z * 7.0 + time * 0.3), 5.0);
+      vec3 sheetColor = palette(warp.x * 0.20 + warp.y * 0.17 + z * 0.35 + crease * 0.16 + time * 0.018);
+      color += shellMask * (sheetColor * (0.07 + sheet * 1.35) + vec3(0.9,1.0,1.0) * reflection * 2.0);
+      float coolReflection = pow(max(0.0, dot(direction, normalize(vec2(-0.7,0.7)))), 12.0);
+      float glossFold = pow(0.5 + 0.5 * sin(crease * 2.7 + z * 7.0 + time * 0.3 + 1.1), 8.0);
+      color += vec3(0.72,0.96,1.0) * shellMask * coolReflection * (0.5 + glossFold) * 3.0;
+      color += vec3(0.14,0.002,0.008) * shellMask * (1.0-sheet) * 0.24;
       color += mix(edgeColor, vec3(1.0), 0.35) * aurora * 2.0;
       // Tonal notes illuminate moving stars and short lightning links inside the hollow ring.
       float melody = clamp(treble, 0.0, 1.0);
@@ -478,7 +499,7 @@ class MelodyOnsetDetector {
     const level = signal.kick;
     const radius = height * (0.255 + level * 0.055);
     const gradient = ctx.createConicGradient(contourClock * 0.025, width / 2, height * 0.43);
-    ['#08cfff', '#7433ff', '#ff2099', '#073dcc', '#08cfff'].forEach((color, i) => gradient.addColorStop(i / 4, color));
+    ['#092aff', '#03f2ff', '#ffee04', '#ff3b00', '#400009', '#5605dc', '#092aff'].forEach((color, i) => gradient.addColorStop(i / 6, color));
     ctx.save();
     ctx.strokeStyle = gradient;
     ctx.lineWidth = height * (0.012 + level * 0.006);
