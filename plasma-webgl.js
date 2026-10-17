@@ -244,15 +244,14 @@ class MelodyOnsetDetector {
     }
 
     vec3 palette(float t) {
-      vec3 deepBlue = vec3(0.018, 0.06, 0.48);
-      vec3 cyan = vec3(0.02, 0.86, 1.0);
-      vec3 violet = vec3(0.43, 0.07, 1.0);
-      vec3 magenta = vec3(1.0, 0.06, 0.56);
-      float x = fract(t);
-      if (x < 0.24) return mix(deepBlue, cyan, x / 0.24);
-      if (x < 0.50) return mix(cyan, violet, (x - 0.24) / 0.26);
-      if (x < 0.76) return mix(violet, magenta, (x - 0.50) / 0.26);
-      return mix(magenta, deepBlue, (x - 0.76) / 0.24);
+      // Iridescent liquid: cyan/blue, violet, pink and warm gold from the reference.
+      vec3 blue = vec3(0.015, 0.20, 1.0), cyan = vec3(0.02, 1.0, 0.88);
+      vec3 pink = vec3(1.0, 0.035, 0.50), gold = vec3(1.0, 0.58, 0.015);
+      float x = fract(t) * 4.0;
+      if (x < 1.0) return mix(blue, cyan, smoothstep(0.0,1.0,x));
+      if (x < 2.0) return mix(cyan, pink, smoothstep(1.0,2.0,x));
+      if (x < 3.0) return mix(pink, gold, smoothstep(2.0,3.0,x));
+      return mix(gold, blue, smoothstep(3.0,4.0,x));
     }
 
     float segmentDistance(vec2 p, vec2 a, vec2 b) {
@@ -266,16 +265,20 @@ class MelodyOnsetDetector {
       float pulse = clamp(bass, 0.0, 1.0);
       float radius = 0.255 + pulse * 0.055;
       float a = atan(p.y, p.x);
-      float contour = radius * (1.0 + pulse * 0.035 * sin(a * 3.0)
-        + 0.009 * sin(a * 5.0 + time * 0.7) + 0.006 * sin(a * 9.0 - time * 0.5));
+      vec2 direction = vec2(cos(a), sin(a));
+      float flow = noise(direction * 2.7 + vec2(time * 0.23, -time * 0.17));
+      float fold = sin(a * 3.0 + time * 0.75 + flow * 2.2);
+      float contour = radius * (1.0 + (0.025 + pulse * 0.065) * fold
+        + 0.020 * sin(a * 2.0 - time * 0.53) + 0.012 * sin(a * 5.0 + time * 0.4));
       float distanceToEdge = abs(length(p) - contour);
       float snare = clamp(mid, 0.0, 1.0);
-      float thickness = 0.006 + pulse * 0.003 + snare * 0.002;
+      float ribbon = 0.5 + 0.5 * sin(a * 2.0 - time * 0.65 + flow * 5.0);
+      float thickness = 0.005 + pow(ribbon, 2.0) * (0.017 + pulse * 0.012) + snare * 0.002;
       float edge = 1.0 - smoothstep(thickness, thickness + 0.002, distanceToEdge);
       float exterior = step(contour + thickness, length(p));
-      vec3 edgeColor = palette(a / 6.2831853 + 0.5 + time * 0.025);
+      vec3 edgeColor = palette(a / 6.2831853 + time * 0.025 + flow * 0.22);
       // White turbulence is clipped to the colored stroke, never the black center.
-      float plasma = fbm(vec2(a * 8.0, time * 4.0 + distanceToEdge * 400.0));
+      float plasma = noise(direction * 6.0 + vec2(time * 0.55, distanceToEdge * 90.0));
       float core = (1.0 - smoothstep(thickness * 0.12, thickness * 0.63, distanceToEdge))
                  * (0.6 + plasma * 0.7);
       float bloom = exp(-distanceToEdge * 100.0) * exterior;
@@ -285,7 +288,9 @@ class MelodyOnsetDetector {
       float aurora = exterior * snare * exp(-outward / curtain)
                    * (1.0 - smoothstep(curtain, curtain * 2.0, outward)) * (0.25 + rays);
       vec3 color = edgeColor * (edge * (1.3 + pulse + snare) + bloom * (0.4 + pulse * 0.5));
-      color += vec3(1.0) * core * edge * (1.15 + pulse + snare * 1.5);
+      float strand = pow(0.5 + 0.5 * sin(distanceToEdge * 360.0 + flow * 8.0 - time * 1.3), 6.0);
+      color += edgeColor * strand * edge * 0.8;
+      color += vec3(1.0, 0.98, 0.94) * core * edge * (0.65 + pulse * 0.8 + snare);
       color += mix(edgeColor, vec3(1.0), 0.35) * aurora * 2.0;
       // Tonal notes illuminate moving stars and short lightning links inside the hollow ring.
       float melody = clamp(treble, 0.0, 1.0);
@@ -458,8 +463,18 @@ class MelodyOnsetDetector {
     return { kick: Math.min(1, pulse * gain / 1.35), snare: Math.min(1, snarePulse * gain / 1.35), melody: Math.min(1, melodyPulse * gain / 1.35), note: melodySeed + Math.min(1, melodyDetector.peakHz / 8000) };
   }
 
+  let visualKick = 0, visualSnare = 0, visualLast = 0;
+  function fluidSignal() {
+    const signal = readKickPulse(), now = performance.now();
+    const dt = visualLast ? Math.min(100, now - visualLast) : 16;
+    visualLast = now;
+    visualKick += (signal.kick - visualKick) * (1 - Math.exp(-dt / 32));
+    visualSnare += (signal.snare - visualSnare) * (1 - Math.exp(-dt / 22));
+    return { ...signal, kick: visualKick, snare: visualSnare };
+  }
+
   function drawKickFallback(width, height) {
-    const signal = readKickPulse();
+    const signal = fluidSignal();
     const level = signal.kick;
     const radius = height * (0.255 + level * 0.055);
     const gradient = ctx.createConicGradient(contourClock * 0.025, width / 2, height * 0.43);
@@ -511,7 +526,7 @@ class MelodyOnsetDetector {
     ctx.restore();
   }
 
-  let quality = 0.92;
+  let quality = 1;
   let slowFrames = 0;
   let fastFrames = 0;
   let lastFrameAt = 0;
@@ -538,17 +553,17 @@ class MelodyOnsetDetector {
     }
 
     if (slowFrames > 16) {
-      quality = Math.max(0.48, quality - 0.10);
+      quality = Math.max(0.62, quality - 0.08);
       slowFrames = 0;
     } else if (fastFrames > 180) {
-      quality = Math.min(0.92, quality + 0.04);
+      quality = Math.min(1, quality + 0.04);
       fastFrames = 0;
     }
 
-    const maxPixels = 300000;
+    const maxPixels = 550000;
     const dpr = Math.min(
       window.devicePixelRatio || 1,
-      1.10,
+      1.6,
       Math.sqrt(maxPixels / Math.max(1, width * height)),
     ) * quality;
     const w = Math.max(1, Math.round(width * dpr));
@@ -558,7 +573,7 @@ class MelodyOnsetDetector {
       surface.height = h;
     }
 
-    const percussion = readKickPulse();
+    const percussion = fluidSignal();
     const signal = { bass: percussion.kick, mid: percussion.snare, treble: percussion.melody, energy: percussion.note };
     surface.style.filter = baseCanvas.style.filter;
     gl.viewport(0, 0, w, h);

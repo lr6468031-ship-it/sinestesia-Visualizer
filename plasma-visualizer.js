@@ -353,7 +353,7 @@ if (window.ResizeObserver) new ResizeObserver(() => { contourSize = null; }).obs
 function contourFrame(now) {
   animationFrame = null;
   if (document.hidden) return;
-  const targetFrameMs = audio.paused ? 66 : 24;
+  const targetFrameMs = audio.paused ? 40 : 16;
   if (contourLast && now - contourLast < targetFrameMs) {
     animationFrame = requestAnimationFrame(contourFrame);
     return;

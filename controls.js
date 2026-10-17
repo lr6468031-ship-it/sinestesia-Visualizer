@@ -1,3 +1,12 @@
+// Drawing interpolation only: detection still uses the original FFT bins and XY gates.
+function smoothSpectrumDb(values, position) {
+  const read = i => Number.isFinite(values[Math.max(0, Math.min(values.length - 1, i))]) ? Math.max(-100, Math.min(0, values[Math.max(0, Math.min(values.length - 1, i))])) : -100;
+  const index = Math.floor(position), t = position - index;
+  const a=read(index-1), b=read(index), c=read(index+1), d=read(index+2);
+  const value=b+0.5*t*(c-a+t*(2*a-5*b+4*c-d+t*(3*(b-c)+d-a)));
+  return Math.max(Math.min(b,c), Math.min(Math.max(b,c), value));
+}
+
 (() => {
   const audio = document.getElementById('audio');
   const audioFile = document.getElementById('audioFile');
@@ -209,36 +218,47 @@
   const statusElement = document.getElementById('spectrumStatus');
   audioElement.addEventListener('pause', () => { statusElement.textContent = 'En pausa · los ajustes siguen activos aunque ocultes el espectrograma.'; });
   const clear = () => {
+    displayCurve = null;
     context.clearRect(0, 0, surface.width, surface.height);
     statusElement.textContent = 'Carga y reproduce música para ver sus frecuencias.';
   };
   audioElement.addEventListener('emptied', clear);
   audioElement.addEventListener('seeking', clear);
   let lastRow = 0;
+  let displayCurve = null;
   window.sinestesiaSpectrumFrame = (spectrum, sampleRate, now) => {
-    if (panel.hidden || now - lastRow < 40) return;
+    if (panel.hidden || now - lastRow < 16) return;
+    const elapsed = lastRow ? Math.min(100, now - lastRow) : 16;
     lastRow = now;
-    const width = Math.max(1, Math.min(1400, Math.round(plot.clientWidth * Math.min(devicePixelRatio || 1, 2))));
-    const height = 420;
+    const dpr = Math.min(devicePixelRatio || 1, 3);
+    const width = Math.max(1, Math.min(2560, Math.round(plot.clientWidth * dpr)));
+    const height = Math.max(1, Math.round(plot.clientHeight * dpr));
+    if (!displayCurve || displayCurve.length !== width) displayCurve = new Float32Array(width).fill(-100);
     if (surface.width !== width || surface.height !== height) { surface.width = width; surface.height = height; }
     context.fillStyle = '#04070e'; context.fillRect(0, 0, width, height);
     context.strokeStyle = '#ffffff12'; context.lineWidth = 1;
     for (let db = -10; db > -100; db -= 10) { const y = -db / 100 * height; context.beginPath(); context.moveTo(0,y); context.lineTo(width,y); context.stroke(); }
     const gradient = context.createLinearGradient(0, height, 0, 0);
     gradient.addColorStop(0, '#1946aa'); gradient.addColorStop(0.5, '#24e5d0'); gradient.addColorStop(1, '#ffe3fa');
-    context.strokeStyle = gradient; context.lineWidth = Math.max(1, width / 700);
+    context.strokeStyle = gradient; context.lineWidth = Math.max(1, dpr * 1.1);
+    context.lineJoin = 'round'; context.lineCap = 'round';
     const binHz = sampleRate / (spectrum.length * 2);
     context.beginPath();
     for (let x = 0; x < width; x++) {
-      const lo = Math.max(1, Math.floor(hzAt(x / width) / binHz));
-      const hi = Math.min(spectrum.length - 1, Math.ceil(hzAt((x + 1) / width) / binHz));
-      let db = -100;
-      for (let i = lo; i <= hi; i++) db = Math.max(db, spectrum[i]);
-      const y = Math.max(0, Math.min(height, -db / 100 * height));
-      context.moveTo(x, height); context.lineTo(x, y);
+      const position = hzAt(x / Math.max(1, width - 1)) / binHz;
+      let db = smoothSpectrumDb(spectrum, position);
+      const end = Math.min(spectrum.length - 1, Math.floor(hzAt((x + 1) / width) / binHz));
+      // Preserve narrow high-frequency peaks when more than one FFT bin occupies a pixel.
+      for (let i = Math.ceil(position); i <= end; i++) db = Math.max(db, Number.isFinite(spectrum[i]) ? spectrum[i] : -100);
+      const tau = db > displayCurve[x] ? 35 : 140;
+      displayCurve[x] += (db - displayCurve[x]) * (1 - Math.exp(-elapsed / tau));
+      const y = Math.max(0, Math.min(height, -displayCurve[x] / 100 * height));
+      if (x === 0) context.moveTo(x, y); else context.lineTo(x, y);
     }
     context.stroke();
-    statusElement.textContent = 'En vivo · X: 20 Hz–16 kHz · Y: −100 a 0 dBFS · solo se aceptan picos dentro de cada zona.';
+    context.lineTo(width, height); context.lineTo(0, height); context.closePath();
+    context.globalAlpha = 0.14; context.fillStyle = gradient; context.fill(); context.globalAlpha = 1;
+    statusElement.textContent = 'Curva suavizada · X: 20 Hz–16 kHz · Y: −100 a 0 dBFS · solo se aceptan picos dentro de cada zona.';
   };
   updateUI();
   widthControl.value = settings.melodyWidth;
