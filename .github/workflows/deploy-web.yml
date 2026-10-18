@@ -12,6 +12,7 @@ on:
       - 'plasma-ultra-tuning.js'
       - 'fluid-visualizer.js'
       - 'lagrangian-visualizer.js'
+      - 'electric-iris.js'
       - 'visual-intensity.js'
       - 'plasma-webgl.js'
       - 'plasma-webgpu.js'
