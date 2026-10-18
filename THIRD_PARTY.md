@@ -51,3 +51,23 @@ not load NetCDF data or use the upstream Android native/compute-shader runtime.
 Reference: Martin Opat, Julian Koellermeier and Christian Kehl, “Lagrangian fluid
 transport simulation using mobile devices”, Simulation Modelling Practice and
 Theory 145 (2025), 103214. https://doi.org/10.1016/j.simpat.2025.103214
+
+
+## GameMaker Casts particle designs
+
+`gamemaker-particles.js` adapts the particle wrapper, rain, flame/smoke and
+starfield examples from https://github.com/GamemakerCasts/particles at
+`0119f608915ab61df1b74f6021716080d247ab82` (release-2.1.0).
+Copyright (c) 2021 GameMaker Casts, MIT. The complete original project,
+including every GML event, sprite frame, project settings, README and license,
+is retained under `vendor/gamemaker-particles/upstream/`.
+`vendor/gamemaker-particles/provenance.json` records SHA-256 for every file.
+
+The JavaScript port retains the original emitter parameters, 60 Hz simulation,
+color palettes, flame sprites, alpha ramps and negative stream interval for
+smoke. Canvas rendering approximates GameMaker built-in line/square shapes and
+Gaussian distribution; viewport placement, emission bounds, audio modulation,
+scene selection and fullscreen behavior are Sinestesia additions. The combined
+panorama adds the starfield to the upstream room's flame and rain. Standalone
+smoke and classic particles expose the smoke emitter and the wrapper defaults.
+GML is preserved as reference source; a GameMaker runtime is not embedded.

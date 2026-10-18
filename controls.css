@@ -256,3 +256,33 @@
 .stem-row.is-playing { border-color: #b6ffdb; box-shadow: 0 0 16px #76ffd522; }
 .stem-row a { display: flex; align-items: center; min-height: 44px; }
 .separate-output:focus { outline: 2px solid #83ffc655; outline-offset: 5px; border-radius: 12px; }
+
+/* Scene selection remains reachable while the visualizer fills the screen. */
+.panorama-toolbar {
+  position: absolute; top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right));
+  z-index: 30; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.panorama-toolbar > * { pointer-events: auto; }
+.panorama-toolbar label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #eee5ff; font-size: 12px; }
+.panorama-toolbar [hidden] { display: none; }
+.panorama-toolbar button, .panorama-toolbar select {
+  min-height: 44px; max-width: 100%; border: 1px solid #ffffff40; border-radius: 12px;
+  padding: 8px 12px; background: #080b18e8; color: #f5f0ff; font: inherit;
+}
+.panorama-toolbar button { cursor: pointer; }
+.panorama-toolbar button:focus-visible, .panorama-toolbar select:focus-visible { outline: 2px solid #85caff; outline-offset: 2px; }
+body.panorama-open { overflow: hidden; }
+.stage.is-panorama, .stage:fullscreen {
+  position: fixed; inset: 0; z-index: 1000; width: 100vw; height: 100vh; height: 100dvh;
+  min-height: 0; max-height: none; aspect-ratio: auto; border: 0; border-radius: 0; margin: 0;
+}
+.stage.is-panorama .music-dock, .stage:fullscreen .music-dock {
+  bottom: max(12px, env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right));
+}
+@media (max-width: 480px) {
+  .panorama-toolbar { gap: 6px; }
+  .panorama-toolbar label { font-size: 11px; }
+  .panorama-toolbar button, .panorama-toolbar select { padding: 7px 9px; font-size: 11px; }
+}

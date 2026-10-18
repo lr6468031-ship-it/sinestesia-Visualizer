@@ -13,6 +13,8 @@ on:
       - 'fluid-visualizer.js'
       - 'lagrangian-visualizer.js'
       - 'electric-iris.js'
+      - 'gamemaker-particles.js'
+      - 'panorama.js'
       - 'visual-intensity.js'
       - 'plasma-webgl.js'
       - 'plasma-webgpu.js'
