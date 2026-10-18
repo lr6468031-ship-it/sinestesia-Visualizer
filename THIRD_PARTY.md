@@ -14,6 +14,15 @@ Investigado e integrado el 17 de octubre de 2026.
 - Revisados también https://github.com/timcsy/demucs-web y https://github.com/nomadkaraoke/python-audio-separator.
   No se copió su código. https://github.com/sevagh/free-music-demixer declara pesos y otros activos propietarios; no se redistribuyen dichos activos.
 
+## Visualizador Fluido Gas · Plasma + Vapor
+
+- **WebGL Fluid Simulation**, Pavel Dobryakov: https://github.com/PavelDoGreat/WebGL-Fluid-Simulation
+  El solver GPU de `fluid-visualizer.js` adapta el enfoque stable-fluids y partes sustanciales de la arquitectura WebGL del proyecto original. Licencia MIT, Copyright (c) 2017 Pavel Dobryakov. La cabecera de licencia se conserva dentro del archivo adaptado.
+- **Quiet Current**, HAMIM71: https://github.com/HAMIM71/Quiet-Current
+  Se estudió como referencia para la idea de acoplar energía de interacción con un fluido y música. Quiet Current declara estar construido sobre el mismo motor MIT de Pavel Dobryakov. No se incorporó su motor musical generativo: Sinestesia usa su propio analizador, detección de kick/snare/melodía y sus propios emisores de color/velocidad.
+
+El modo Fluido Gas añade sobre el solver: emisión radial por kick, inyecciones laterales por ataques de agudos/snare, flujo continuo por medios/melodía, control táctil con Pointer Events, paleta plasma/vapor, sombreado gaseoso y ajuste dinámico de resolución para móvil.
+
 ## Qué se separa
 
 La IA genera **voz, batería, bajo y otros**. Piano, sintetizadores y efectos suelen compartir `otros`. Los vocal chops pueden quedar en voz u otros. No se presentan nombres de instrumentos que el modelo no ha separado.
