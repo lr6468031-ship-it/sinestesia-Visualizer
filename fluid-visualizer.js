@@ -46,7 +46,7 @@ SOFTWARE.
     inset: '0',
     width: '100%',
     height: '100%',
-    display: 'block',
+    display: 'none',
     background: '#000',
     zIndex: '1',
     touchAction: 'none',
@@ -920,7 +920,8 @@ SOFTWARE.
     active = selector.value === 'fluidGas' && ready && !contextLost;
     window.sinestesiaFluidGasActive = active;
     fluidCanvas.hidden = !active;
-    baseCanvas.style.visibility = active ? 'hidden' : 'visible';
+    fluidCanvas.style.display = active ? 'block' : 'none';
+    baseCanvas.style.visibility = active || window.sinestesiaPlasmaWebGLActive ? 'hidden' : 'visible';
     if (active) {
       if (notice) notice.textContent = 'Fluido Gas activo · arrastra el dedo para empujar el plasma.';
       if (resizeFluidCanvas()) initFramebuffers();
