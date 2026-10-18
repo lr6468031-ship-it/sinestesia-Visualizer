@@ -17,7 +17,7 @@ Investigado e integrado el 17 de octubre de 2026.
 ## Visualizador Fluido Gas · Plasma + Vapor
 
 - **WebGL Fluid Simulation**, Pavel Dobryakov: https://github.com/PavelDoGreat/WebGL-Fluid-Simulation
-  El solver GPU de `fluid-visualizer.js` adapta el enfoque stable-fluids y partes sustanciales de la arquitectura WebGL del proyecto original. Licencia MIT, Copyright (c) 2017 Pavel Dobryakov. La cabecera de licencia se conserva dentro del archivo adaptado.
+  `fluid-visualizer.js` integra el solver, los shaders, bloom y sunrays del `script.js` original (blob d0db5af6bac342d9eb00205435d8b8997ebee815). Se retiraron promoción, analítica y dat.GUI; se añadieron controles Pointer Events relativos al escenario, acoplamiento al audio de Sinestesia, límites de resolución móvil y manejo visible de errores. La textura de dithering se reemplazó por un texel neutro local. Licencia MIT, Copyright (c) 2017 Pavel Dobryakov. La cabecera de licencia se conserva dentro del archivo adaptado.
 - **Quiet Current**, HAMIM71: https://github.com/HAMIM71/Quiet-Current
   Se estudió como referencia para la idea de acoplar energía de interacción con un fluido y música. Quiet Current declara estar construido sobre el mismo motor MIT de Pavel Dobryakov. No se incorporó su motor musical generativo: Sinestesia usa su propio analizador, detección de kick/snare/melodía y sus propios emisores de color/velocidad.
 
