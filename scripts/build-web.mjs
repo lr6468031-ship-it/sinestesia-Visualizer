@@ -28,8 +28,10 @@ if (!existsSync(model) || await digest(model, 'sha256') !== modelHash) {
   execFileSync('tar', ['-xzf', tarball, '-C', cache, '--strip-components=1', 'package/htdemucs.onnx']);
   if (await digest(model, 'sha256') !== modelHash) throw new Error('Model checksum mismatch');
 }
-const assets = ['index.html','app.js','styles.css','bass-wave.js','plasma-visualizer.js','plasma-ultra-tuning.js','fluid-visualizer.js','visual-intensity.js','plasma-webgl.js','plasma-webgpu.js','controls.css','controls.js','separation.js','separation-dsp.js','THIRD_PARTY.md'];
+const assets = ['index.html','app.js','styles.css','bass-wave.js','plasma-visualizer.js','plasma-ultra-tuning.js','fluid-visualizer.js','lagrangian-visualizer.js','visual-intensity.js','plasma-webgl.js','plasma-webgpu.js','controls.css','controls.js','separation.js','separation-dsp.js','THIRD_PARTY.md'];
 for (const file of assets) await copyFile(join(root,file), join(out,file));
+await mkdir(join(out,'vendor/lagrangian'), { recursive: true });
+await copyFile(join(root,'vendor/lagrangian/LICENSE'), join(out,'vendor/lagrangian/LICENSE'));
 await copyFile(model, join(assetDir,'htdemucs.onnx'));
 await copyFile(join(root,'vendor/demucs/LICENSE.md'), join(assetDir,'LICENSE-demucs.md'));
 await copyFile(join(root,'vendor/onnxruntime/LICENSE'), join(assetDir,'LICENSE-onnxruntime.txt'));

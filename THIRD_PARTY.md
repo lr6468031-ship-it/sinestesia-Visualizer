@@ -36,3 +36,18 @@ La canción y las pistas se procesan localmente. Solo se descargan el runtime y 
 `npm ci` y `npm run build:web` generan `dist/`, incluido el runtime y el modelo verificado. Para otro destino: `npm run build:web -- --outdir /ruta/destino`.
 
 El separador se descarga al pulsar el botón; la visualización y los detectores existentes siguen funcionando sin cargarlo. Demucs es una separación aproximada; los artefactos no significan que cada pista corresponda exactamente a un instrumento. La detección de frecuencias del visualizador y la separación neuronal son procesos diferentes.
+
+
+## Lagrangian particle advection
+
+`lagrangian-visualizer.js` adapts the RK4 particle advection and space/time
+velocity interpolation from `simulation/app/src/main/assets/compute_shader.glsl`
+in https://github.com/MartinOpat/Lagrangian-fluid-simulation-for-Android.
+Copyright (c) 2024 MartinOpat (University of Groningen), MIT.
+Full license: [vendor/lagrangian/LICENSE](vendor/lagrangian/LICENSE).
+The browser port uses 2D procedural music-driven fields (vortex, currents and
+turbulence); these are new presets, not upstream physical fluid models. It does
+not load NetCDF data or use the upstream Android native/compute-shader runtime.
+Reference: Martin Opat, Julian Koellermeier and Christian Kehl, “Lagrangian fluid
+transport simulation using mobile devices”, Simulation Modelling Practice and
+Theory 145 (2025), 103214. https://doi.org/10.1016/j.simpat.2025.103214
