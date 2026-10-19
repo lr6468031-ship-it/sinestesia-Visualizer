@@ -43,7 +43,7 @@ Object.assign(fluidCanvas.style,{position:'absolute',inset:'0',width:'100%',heig
 stage.insertBefore(fluidCanvas,base.nextSibling);
 let ready=false, active=false, lastInjection=0, lastBeat=0, previousKick=0;
 function choose(){
- active=['fluidGas','pixels2021'].includes(selector.value)&&ready;
+ active=(window.sinestesiaAnalysisMode === 'separation' ? window.sinestesiaStemRouter.active('fluidGas') : ['fluidGas','pixels2021'].includes(selector.value))&&ready;
  if(ready)applyMode();
  fluidCanvas.hidden=!active;fluidCanvas.style.display=active?'block':'none';
  window.sinestesiaFluidGasActive=active;
@@ -1583,7 +1583,8 @@ function createStudio(){
 function driveMusic(){
  const now=performance.now(), playing=typeof audio!=='undefined'&&!audio.paused;
  let signal={bass:0,mid:0,treble:0,kick:0};
- if(playing&&typeof fastBeatSignal==='function')signal=fastBeatSignal();
+ if(window.sinestesiaAnalysisMode==='separation')signal=window.sinestesiaStemRouter.signal('fluidGas');
+ else if(playing&&typeof fastBeatSignal==='function')signal=fastBeatSignal();
  const gain=Number(document.getElementById('fluidIntensity')?.value)||1.35;
  const kick=Number(signal.kick)||0;
  if(playing&&kick>0.25&&kick>previousKick+0.035&&now-lastBeat>140){
@@ -1593,7 +1594,7 @@ function driveMusic(){
  if(!config.AUTO || now-lastInjection<(playing?85:180))return;
  lastInjection=now;
  const t=now*0.0004, level=playing?Math.min(1,Number(signal.mid)||0):0.12;
- const color=generateColor(), strength=(playing?0.6+level*2:0.7)*gain;
+ const color=generateColor(), strength=(window.sinestesiaAnalysisMode==='separation' ? level*2 : (playing?0.6+level*2:0.7))*gain;
  color.r*=strength;color.g*=strength;color.b*=strength;
  splat(0.5+Math.cos(t*2.7)*0.23,0.5+Math.sin(t*3.1)*0.23,-Math.sin(t*2.7)*(80+level*220),Math.cos(t*3.1)*(80+level*220),color);
 }

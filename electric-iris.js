@@ -57,7 +57,7 @@ if (typeof document !== 'undefined') (() => {
   let active=false, frame=0, last=0, quality=1, slow=0, fast=0;
   function schedule() { if(active&&!document.hidden&&!frame)frame=requestAnimationFrame(draw); }
   function choose() {
-    active=selector.value==='electricIris';surface.style.display=active?'block':'none';
+    active=window.sinestesiaStemRouter?.active('electricIris') ?? selector.value==='electricIris';surface.style.display=active?'block':'none';
     if(active) {
       base.style.visibility='hidden';
       const notice=document.getElementById('visualNotice');
@@ -75,13 +75,13 @@ if (typeof document !== 'undefined') (() => {
     if(elapsed>.04){slow++;fast=0;}else{fast++;slow=Math.max(0,slow-1);}
     if(slow>18){quality=Math.max(.55,quality-.12);slow=0;}
     if(fast>240){quality=Math.min(1,quality+.08);fast=0;}
-    const rect=base.getBoundingClientRect();
+    const rect=surface.getBoundingClientRect();
     if(!rect.width||!rect.height){schedule();return;}
     const dpr=Math.min(window.devicePixelRatio||1,1.5,Math.sqrt(850000/(rect.width*rect.height)));
     const w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));
     if(surface.width!==w||surface.height!==h){surface.width=w;surface.height=h;}
     const playing=typeof audio!=='undefined'&&!audio.paused;
-    const signal=playing&&typeof fastBeatSignal==='function'?fastBeatSignal():{};
+    const signal=window.sinestesiaStemRouter?.signal('electricIris') ?? (playing&&typeof fastBeatSignal==='function'?fastBeatSignal():{});
     motion.update(elapsed,signal,playing);
     const gain=Number(document.getElementById('fluidIntensity')?.value)||1.35;
     const radius=Math.min(w*.61,h*.43),cx=w*.5,cy=h*.5,t=motion.time;

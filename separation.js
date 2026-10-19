@@ -4,6 +4,7 @@
   const progress = document.getElementById('separateProgress'), message = document.getElementById('separateStatus');
   const results = document.getElementById('separateResults'), original = document.getElementById('separateOriginal');
   const output = document.getElementById('separateOutput'), jump = document.getElementById('separateJump');
+  const router = window.sinestesiaStemRouter;
   const mode = document.getElementById('audioAnalysisMode');
   window.sinestesiaAnalysisMode = 'spectrum';
   function applyMode() {
@@ -22,6 +23,7 @@
       document.getElementById('trackName').textContent = name;
       document.getElementById('compactTrack').textContent = name;
     }
+    router.refresh();
     if (typeof resetVisualState === 'function') resetVisualState();
     window.dispatchEvent(new Event('sinestesia-detection-change'));
   }
@@ -44,25 +46,27 @@
       const height=Math.max(1,Math.min(1,peak)*96);
       ctx.fillRect(x,50-height/2,1,height);
     }
-    return canvas;
+    return {canvas, envelope: StemTimeline.envelope(buffer)};
   }
   jump.addEventListener('click',()=>{output.scrollIntoView({behavior:'smooth',block:'start'});output.focus({preventScroll:true});});
   const duration = document.getElementById('separateDuration'), from = document.getElementById('separateFrom');
   const labels = { drums:'Batería · IA',bass:'Bajo · IA',other:'Otros / melodía · IA',vocals:'Voz · IA',kickEstimate:'Kick · banda estimada',snareEstimate:'Snare · banda estimada',cymbalEstimate:'Platillos · banda estimada' };
   let worker = null, generation = 0, urls = [], originalUrl = null, selected = null, selectedFile = null;
   const stop = text => { generation++; window.sinestesiaSeparating=false; worker?.terminate(); worker=null; start.disabled=!input.files?.length; cancel.disabled=true; duration.disabled=false; from.disabled=false; progress.hidden=true; if(text)message.textContent=text; };
-  function release() { urls.forEach(URL.revokeObjectURL);urls=[];if(originalUrl)URL.revokeObjectURL(originalUrl);originalUrl=null;results.replaceChildren();output.hidden=true;jump.hidden=true;original.hidden=true;selected=null; }
+  function release() { router.clear(); urls.forEach(URL.revokeObjectURL);urls=[];if(originalUrl)URL.revokeObjectURL(originalUrl);originalUrl=null;results.replaceChildren();output.hidden=true;jump.hidden=true;original.hidden=true;selected=null; }
   input.addEventListener('change', () => { stop();release();selectedFile=input.files?.[0]||null;start.disabled=!selectedFile;message.textContent=selectedFile?'Lista para separar. Se procesa en este dispositivo; la canción no se sube.':'Primero carga una canción.'; });
   document.getElementById('separateChoose').addEventListener('click',()=>input.click());
   cancel.addEventListener('click',()=>{stop('Proceso cancelado. Puedes volver a intentarlo.');release();});
   const updateTrack = () => { if(!selected)return;document.getElementById('trackName').textContent=selected;document.getElementById('compactTrack').textContent=selected;document.getElementById('status').textContent=`Reproduciendo: ${selected}`; };
   player.addEventListener('play',updateTrack);
-  async function listen(url,label) {
+  async function listen(url,label,stem=null,position=0) {
+    router.timeline.solo=stem;
     player.pause();player.src=url;selected=label;player.load();
+    if(position)player.currentTime=position;
     try { if(typeof ensureAudioGraph==='function')ensureAudioGraph();await player.play();updateTrack(); }
     catch(_){updateTrack();document.getElementById('status').textContent=`Lista: ${label}. Pulsa reproducir.`;}
   }
-  original.addEventListener('click',()=>{if(originalUrl)listen(originalUrl,`${selectedFile.name} · original`);});
+  original.addEventListener('click',()=>{if(originalUrl)listen(originalUrl,`${selectedFile.name} · original`,null,router.timeline.offset);});
   start.addEventListener('click',async()=>{
     const file=input.files?.[0];if(!file || window.sinestesiaAnalysisMode !== 'separation')return;
     stop();release();selectedFile=file;const token=generation;
@@ -115,17 +119,34 @@
               const description=document.createElement('p');description.className='stem-description';description.textContent=`${seconds.toFixed(1)} s · ${name.endsWith('Estimate')?'Banda aproximada de batería':'Pista separada con IA'}`;
               const button=document.createElement('button');button.type='button';button.textContent='▶ Escuchar';button.setAttribute('aria-label',`Escuchar ${labels[name]}`);button.addEventListener('click',()=>{
                 results.querySelectorAll('article').forEach(card=>card.classList.remove('is-playing'));
-                row.classList.add('is-playing');listen(url,`${file.name} · ${labels[name]}`);
+                row.classList.add('is-playing');listen(url,`${file.name} · ${labels[name]}`,name);
               });
               const wave=await waveform(data.wavs[name],labels[name]);
               if(token!==generation)return;
-              row.append(title,description,wave,button);pending.append(row);
+              router.timeline.tracks.set(name,wave.envelope);
+              const assignment=document.createElement('label');
+              assignment.textContent='Fluido que controla ';
+              const select=document.createElement('select');
+              select.setAttribute('aria-label','Fluido para '+labels[name]);
+              for(const [value,text] of [['','Sin efecto'],...router.modes.map(([id,label])=>[id,label])]) {
+                const option=document.createElement('option');option.value=value;option.textContent=text;
+                select.append(option);
+              }
+              select.value=({drums:'electricIris',bass:'plasma',other:'fluidGas',vocals:'lagrangian:vortex'})[name]||'';
+              router.timeline.routes.set(name,select.value);
+              select.addEventListener('change',()=>{router.timeline.routes.set(name,select.value);router.refresh();});
+              assignment.append(select);
+              row.append(title,description,wave.canvas,assignment,button);pending.append(row);
               progress.value=(index+1)/names.length;
               message.textContent=`Preparando pistas ${index+1}/${names.length}…`;
               await new Promise(resolve=>setTimeout(resolve,0));
             }
             if(token!==generation)return;
+            router.timeline.offset=offset;router.timeline.duration=seconds;
             results.replaceChildren(pending);output.hidden=false;jump.hidden=false;
+            router.refresh();
+            original.textContent='▶ Canción con todos los fluidos';
+            message.textContent='Pistas conectadas. Reproduce la canción para ver los fluidos sincronizados.';
             stop(`Separación terminada: ${names.length} cuadrículas listas abajo. 4 pistas IA y 3 bandas estimadas. Fragmento ${offset.toFixed(1)}–${(offset+seconds).toFixed(1)} s.`);
             output.scrollIntoView({behavior:'smooth',block:'start'});output.focus({preventScroll:true});
           }catch(error){

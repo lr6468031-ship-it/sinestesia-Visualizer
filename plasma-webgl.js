@@ -592,7 +592,7 @@ class MelodyFlowMotion {
   }
 
   function isActive() {
-    return selector.value === 'plasma' && ready && !contextLost;
+    return (window.sinestesiaStemRouter?.active('plasma') ?? selector.value === 'plasma') && ready && !contextLost;
   }
 
   function syncVisibility() {
@@ -656,6 +656,11 @@ class MelodyFlowMotion {
   audio.addEventListener('pause', resetKick);
 
   function readKickPulse() {
+    const routed=window.sinestesiaStemRouter?.signal('plasma');
+    if(routed) {
+      window.sinestesiaKickReadout={pulse:routed.kick,snare:routed.snare,melody:routed.melody,intensity:routed.energy,bpm:0,hz:0,level:routed.energy};
+      return routed;
+    }
     const now = performance.now();
     const dt = Math.min(100, lastPulseFrame ? now - lastPulseFrame : 24);
     lastPulseFrame = now;
@@ -785,6 +790,10 @@ class MelodyFlowMotion {
   let lastFrameAt = 0;
 
   drawAurora = function drawPlasmaWebGL(width, height) {
+    if(window.sinestesiaAnalysisMode==='separation') {
+      if(!isActive())return;
+      const rect=surface.getBoundingClientRect();width=rect.width;height=rect.height;
+    }
     if (!isActive()) {
       drawKickFallback(width, height);
       return;

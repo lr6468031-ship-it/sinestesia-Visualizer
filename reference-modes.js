@@ -310,7 +310,7 @@
   }
 
   function choose() {
-    active = selector.value.startsWith('reference:');
+    active = window.sinestesiaAnalysisMode !== 'separation' && selector.value.startsWith('reference:');
     canvas.style.display = active ? 'block' : 'none';
     if (active) {
       base.style.visibility = 'hidden';

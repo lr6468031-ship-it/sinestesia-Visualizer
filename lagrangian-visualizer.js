@@ -65,7 +65,7 @@ if (typeof document !== 'undefined') (() => {
   const flow = new LagrangianFlow(), particles = Array.from({length:1400}, () => ({x:Math.random(),y:Math.random(),life:Math.random()*8}));
   let active = false, last = 0, time = 0, frame = 0, pointer = null;
   function choose() {
-    active = selector.value.startsWith('lagrangian:');
+    active = window.sinestesiaAnalysisMode === 'separation' ? window.sinestesiaStemRouter.active('lagrangian:vortex') : selector.value.startsWith('lagrangian:');
     surface.style.display = active ? 'block' : 'none';
     if (active) {
       base.style.visibility = 'hidden';
@@ -85,13 +85,13 @@ if (typeof document !== 'undefined') (() => {
     frame = 0;
     if (!active) return;
     const dt = Math.min(.033, last ? (now-last)/1000 : .016); last=now;
-    const r=base.getBoundingClientRect(), scale=Math.min(window.devicePixelRatio||1,1.5);
+    const r=surface.getBoundingClientRect(), scale=Math.min(window.devicePixelRatio||1,1.5);
     const w=Math.max(1,Math.round(r.width*scale)), h=Math.max(1,Math.round(r.height*scale));
     if(surface.width!==w || surface.height!==h) {surface.width=w;surface.height=h;}
     const playing=typeof audio!=='undefined' && !audio.paused;
-    const s=playing && typeof fastBeatSignal==='function' ? fastBeatSignal() : {bass:0,mid:0,treble:0,kick:0};
+    const s=window.sinestesiaStemRouter?.signal('lagrangian:vortex') ?? (playing && typeof fastBeatSignal==='function' ? fastBeatSignal() : {bass:0,mid:0,treble:0,kick:0});
     const gain=Number(document.getElementById('fluidIntensity')?.value)||1.35;
-    const model=selector.value.split(':')[1], speed=(playing ? .35+Math.min(1,s.mid||0)*2 : .25)*gain;
+    const model=window.sinestesiaAnalysisMode === 'separation' ? 'vortex' : selector.value.split(':')[1], speed=(playing ? .35+Math.min(1,s.mid||0)*2 : .25)*gain;
     flow.fill(flow.fields[0],time,model,s.kick||s.bass||0,s.mid||0);
     flow.fill(flow.fields[1],time+dt*speed,model,s.kick||s.bass||0,s.mid||0);
     time+=dt*speed;

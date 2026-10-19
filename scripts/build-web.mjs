@@ -28,7 +28,7 @@ if (!existsSync(model) || await digest(model, 'sha256') !== modelHash) {
   execFileSync('tar', ['-xzf', tarball, '-C', cache, '--strip-components=1', 'package/htdemucs.onnx']);
   if (await digest(model, 'sha256') !== modelHash) throw new Error('Model checksum mismatch');
 }
-const assets = ['index.html','app.js','styles.css','bass-wave.js','plasma-visualizer.js','plasma-ultra-tuning.js','fluid-visualizer.js','particles-fluid-presets.js','fluid-extra-modes.js','fluid-cleanup.js','reference-modes.js','lagrangian-visualizer.js','electric-iris.js','gamemaker-particles.js','panorama.js','visual-intensity.js','plasma-webgl.js','plasma-webgpu.js','controls.css','controls.js','separation.js','separation-dsp.js','THIRD_PARTY.md'];
+const assets = ['index.html','app.js','styles.css','bass-wave.js','plasma-visualizer.js','plasma-ultra-tuning.js','fluid-visualizer.js','particles-fluid-presets.js','fluid-extra-modes.js','fluid-cleanup.js','reference-modes.js','lagrangian-visualizer.js','electric-iris.js','gamemaker-particles.js','panorama.js','visual-intensity.js','plasma-webgl.js','plasma-webgpu.js','controls.css','controls.js','separation.js','stem-routing.js','separation-dsp.js','THIRD_PARTY.md'];
 for (const file of assets) await copyFile(join(root,file), join(out,file));
 await mkdir(join(out,'vendor/lagrangian'), { recursive: true });
 await copyFile(join(root,'vendor/lagrangian/LICENSE'), join(out,'vendor/lagrangian/LICENSE'));

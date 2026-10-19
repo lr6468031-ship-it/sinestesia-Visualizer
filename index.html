@@ -115,7 +115,7 @@
         <p id="separateStatus" class="spectrum-help" role="status">Primero carga una canción.</p>
         <section id="separateOutput" class="separate-output" hidden tabindex="-1" aria-labelledby="separateOutputTitle">
           <h3 id="separateOutputTitle">Tus pistas separadas · 7 cuadrículas</h3>
-          <p class="spectrum-help">Pulsa Escuchar en cualquier cuadrícula: la pista suena aquí mismo y el aro la analiza. Las pistas son temporales: no necesitas guardarlas. Al volver a Espectrograma se descartan.</p>
+          <p class="spectrum-help">Elige un fluido en cada cuadrícula. Pulsa «Canción con todos los fluidos» para verlos juntos, o «Escuchar» para probar una pista. Varios instrumentos asignados al mismo fluido comparten ese efecto. Solo reacciona el fragmento procesado. Las pistas son temporales: no necesitas guardarlas. Al volver a Espectrograma se descartan.</p>
           <div id="separateResults" aria-label="Pistas separadas"></div>
         </section>
         <p class="spectrum-help">Kick, snare y platillos se ofrecen como bandas estimadas de la batería. Piano y sintetizadores permanecen en «Otros»; los vocal chops pueden quedar en voz u otros. No se aíslan todos los instrumentos por separado. Modelo para uso personal e investigación. <a href="THIRD_PARTY.md">Modelos, licencias y límites</a>.</p>
@@ -138,20 +138,21 @@
     <audio id="audio" preload="metadata"></audio>
   </main>
 
+  <script src="stem-routing.js?v=20261019-stem-router1"></script>
   <script src="app.js?v=20261017-fluidgas1"></script>
   <script src="plasma-visualizer.js?v=20261017-fluidgas1"></script>
   <script src="plasma-ultra-tuning.js?v=20261017-fluidgas1"></script>
   <script src="visual-intensity.js?v=20261017-fluidgas1"></script>
-  <script src="plasma-webgl.js?v=20261017-fluidgas1"></script>
-  <script src="fluid-visualizer.js?v=20261019-fluid3"></script>
+  <script src="plasma-webgl.js?v=20261019-stem-router1"></script>
+  <script src="fluid-visualizer.js?v=20261019-stem-router1"></script>
   <script src="particles-fluid-presets.js?v=20261019-apk3"></script>
   <script src="fluid-extra-modes.js?v=20261019-apk3"></script>
   <script src="fluid-cleanup.js?v=20261019-no-pixels"></script>
-  <script src="reference-modes.js?v=20261019-real-modes3"></script>
-  <script src="lagrangian-visualizer.js?v=20261018-rk4"></script>
-  <script src="electric-iris.js?v=20261018-iris1"></script>
+  <script src="reference-modes.js?v=20261019-stem-router1"></script>
+  <script src="lagrangian-visualizer.js?v=20261019-stem-router1"></script>
+  <script src="electric-iris.js?v=20261019-stem-router1"></script>
   <script src="panorama.js?v=20261018-gm1"></script>
   <script src="controls.js?v=20261019-analysis-modes1"></script>
-  <script type="module" src="separation.js?v=20261019-analysis-modes1"></script>
+  <script type="module" src="separation.js?v=20261019-stem-router1"></script>
 </body>
 </html>
