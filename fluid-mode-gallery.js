@@ -1,20 +1,17 @@
-/* Compatibility loader: the old Fluid preset picker was replaced by real visual modes. */
+/* Compatibility loader: keeps the visual references and loads the reconstructed APK Fluid modes. */
 (() => {
   'use strict';
 
-  if (!document.querySelector('script[data-sinestesia-reference-modes]')) {
+  const load = (src, dataKey, dataValue) => {
+    if (document.querySelector(`script[${dataKey}]`)) return;
     const script = document.createElement('script');
-    script.src = 'reference-modes.js?v=20261019-real-modes1';
-    script.dataset.sinestesiaReferenceModes = 'true';
+    script.src = src;
+    script.setAttribute(dataKey, dataValue);
     script.async = false;
     document.head.appendChild(script);
-  }
+  };
 
-  if (!document.querySelector('script[data-sinestesia-particles-fluid]')) {
-    const particles = document.createElement('script');
-    particles.src = 'particles-fluid-presets.js?v=20261019-apk1';
-    particles.dataset.sinestesiaParticlesFluid = 'true';
-    particles.async = false;
-    document.head.appendChild(particles);
-  }
+  load('reference-modes.js?v=20261019-real-modes2', 'data-sinestesia-reference-modes', 'true');
+  load('particles-fluid-presets.js?v=20261019-apk2', 'data-sinestesia-particles-fluid', 'true');
+  load('fluid-extra-modes.js?v=20261019-apk2', 'data-sinestesia-fluid-extra', 'true');
 })();
