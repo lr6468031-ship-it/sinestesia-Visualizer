@@ -17,6 +17,7 @@ on:
       - 'reference-modes.js'
       - 'lagrangian-visualizer.js'
       - 'electric-iris.js'
+      - 'particles-engine.js'
       - 'gamemaker-particles.js'
       - 'panorama.js'
       - 'visual-intensity.js'
