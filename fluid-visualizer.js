@@ -40,7 +40,8 @@ function choose(){
  fluidCanvas.hidden=!active;fluidCanvas.style.display=active?'block':'none';
  window.sinestesiaFluidGasActive=active;
  base.style.visibility=active||window.sinestesiaPlasmaWebGLActive?'hidden':'visible';
- if(active&&notice)notice.textContent='Fluido Gas activo · toca y arrastra para mover los colores.';
+ if(active&&notice)notice.textContent='Fluid · toca y arrastra. Abre Ajustes Fluid para elegir un preajuste.';
+ document.getElementById('fluidStudio')?.toggleAttribute('hidden',!active);
 }
 function fail(error){
  ready=false;choose();
@@ -61,6 +62,7 @@ const canvas = fluidCanvas;
 resizeCanvas();
 
 let config = {
+    TIME_SCALE: 1, AUTO: true, VISCOSITY: 0.2, GRAVITY: 0, WALL: true, HUE: -1, HUE_RANGE: 0.15,
     SIM_RESOLUTION: 128,
     DYE_RESOLUTION: 640,
     CAPTURE_RESOLUTION: 512,
@@ -660,6 +662,7 @@ const divergenceShader = compileShader(gl.FRAGMENT_SHADER, `
     varying highp vec2 vT;
     varying highp vec2 vB;
     uniform sampler2D uVelocity;
+    uniform bool wall;
 
     void main () {
         float L = texture2D(uVelocity, vL).x;
@@ -668,10 +671,10 @@ const divergenceShader = compileShader(gl.FRAGMENT_SHADER, `
         float B = texture2D(uVelocity, vB).y;
 
         vec2 C = texture2D(uVelocity, vUv).xy;
-        if (vL.x < 0.0) { L = -C.x; }
-        if (vR.x > 1.0) { R = -C.x; }
-        if (vT.y > 1.0) { T = -C.y; }
-        if (vB.y < 0.0) { B = -C.y; }
+        if (wall && vL.x < 0.0) { L = -C.x; }
+        if (wall && vR.x > 1.0) { R = -C.x; }
+        if (wall && vT.y > 1.0) { T = -C.y; }
+        if (wall && vB.y < 0.0) { B = -C.y; }
 
         float div = 0.5 * (R - L + T - B);
         gl_FragColor = vec4(div, 0.0, 0.0, 1.0);
@@ -710,6 +713,7 @@ const vorticityShader = compileShader(gl.FRAGMENT_SHADER, `
     varying vec2 vB;
     uniform sampler2D uVelocity;
     uniform sampler2D uCurl;
+    uniform float gravity;
     uniform float curl;
     uniform float dt;
 
@@ -726,7 +730,7 @@ const vorticityShader = compileShader(gl.FRAGMENT_SHADER, `
         force.y *= -1.0;
 
         vec2 velocity = texture2D(uVelocity, vUv).xy;
-        velocity += force * dt;
+        velocity += (force + vec2(0.0, -gravity * 80.0)) * dt;
         velocity = min(max(velocity, -1000.0), 1000.0);
         gl_FragColor = vec4(velocity, 0.0, 1.0);
     }
@@ -837,6 +841,15 @@ const bloomFinalProgram      = new Program(baseVertexShader, bloomFinalShader);
 const sunraysMaskProgram     = new Program(baseVertexShader, sunraysMaskShader);
 const sunraysProgram         = new Program(baseVertexShader, sunraysShader);
 const splatProgram           = new Program(baseVertexShader, splatShader);
+const viscosityProgram = new Program(baseVertexShader, compileShader(gl.FRAGMENT_SHADER, `
+precision highp float;
+varying vec2 vUv; varying vec2 vL; varying vec2 vR; varying vec2 vT; varying vec2 vB;
+uniform sampler2D uVelocity; uniform float amount;
+void main(){
+ vec2 c=texture2D(uVelocity,vUv).xy;
+ vec2 neighbors=texture2D(uVelocity,vL).xy+texture2D(uVelocity,vR).xy+texture2D(uVelocity,vT).xy+texture2D(uVelocity,vB).xy;
+ gl_FragColor=vec4(mix(c,neighbors*.25,amount),0.,1.);
+}`));
 const advectionProgram       = new Program(baseVertexShader, advectionShader);
 const divergenceProgram      = new Program(baseVertexShader, divergenceShader);
 const curlProgram            = new Program(baseVertexShader, curlShader);
@@ -846,7 +859,12 @@ const gradienSubtractProgram = new Program(baseVertexShader, gradientSubtractSha
 
 const displayMaterial = new Material(baseVertexShader, displayShaderSource);
 
+function disposeFBO(target) {
+    if (!target) return;
+    gl.deleteTexture(target.texture); gl.deleteFramebuffer(target.fbo);
+}
 function initFramebuffers () {
+    for (const target of [divergence,curl,pressure?.read,pressure?.write,bloom,sunrays,sunraysTemp,...bloomFramebuffers]) disposeFBO(target);
     let simRes = getResolution(config.SIM_RESOLUTION);
     let dyeRes = getResolution(config.DYE_RESOLUTION);
 
@@ -977,6 +995,7 @@ function resizeFBO (target, w, h, internalFormat, format, type, param) {
     copyProgram.bind();
     gl.uniform1i(copyProgram.uniforms.uTexture, target.attach(0));
     blit(newFBO);
+    disposeFBO(target);
     return newFBO;
 }
 
@@ -984,6 +1003,7 @@ function resizeDoubleFBO (target, w, h, internalFormat, format, type, param) {
     if (target.width == w && target.height == h)
         return target;
     target.read = resizeFBO(target.read, w, h, internalFormat, format, type, param);
+    disposeFBO(target.write);
     target.write = createFBO(w, h, internalFormat, format, type, param);
     target.width = w;
     target.height = h;
@@ -1031,6 +1051,7 @@ multipleSplats(8);
 
 let lastUpdateTime = Date.now();
 let colorUpdateTimer = 0.0;
+createStudio();
 ready = true;
 choose();
 update();
@@ -1039,14 +1060,15 @@ function update () {
     requestAnimationFrame(update);
     if (!active || document.hidden) { lastUpdateTime = Date.now(); return; }
     try {
-    const dt = calcDeltaTime();
+    const dt = calcDeltaTime() * config.TIME_SCALE;
     if (resizeCanvas())
         initFramebuffers();
     updateColors(dt);
-    applyInputs();
-    driveMusic();
-    if (!config.PAUSED)
+    if (!config.PAUSED && dt > 0) {
+        applyInputs();
+        driveMusic();
         step(dt);
+    }
     render(null);
     } catch (error) { fail(error); }
 }
@@ -1097,6 +1119,13 @@ function applyInputs () {
 function step (dt) {
     gl.disable(gl.BLEND);
 
+    if (config.VISCOSITY > 0) {
+        viscosityProgram.bind();
+        gl.uniform2f(viscosityProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+        gl.uniform1f(viscosityProgram.uniforms.amount, Math.min(0.95, config.VISCOSITY * dt * 12));
+        gl.uniform1i(viscosityProgram.uniforms.uVelocity, velocity.read.attach(0));
+        blit(velocity.write); velocity.swap();
+    }
     curlProgram.bind();
     gl.uniform2f(curlProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
     gl.uniform1i(curlProgram.uniforms.uVelocity, velocity.read.attach(0));
@@ -1106,12 +1135,14 @@ function step (dt) {
     gl.uniform2f(vorticityProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
     gl.uniform1i(vorticityProgram.uniforms.uVelocity, velocity.read.attach(0));
     gl.uniform1i(vorticityProgram.uniforms.uCurl, curl.attach(1));
+    gl.uniform1f(vorticityProgram.uniforms.gravity, config.GRAVITY);
     gl.uniform1f(vorticityProgram.uniforms.curl, config.CURL);
     gl.uniform1f(vorticityProgram.uniforms.dt, dt);
     blit(velocity.write);
     velocity.swap();
 
     divergenceProgram.bind();
+    gl.uniform1i(divergenceProgram.uniforms.wall, config.WALL ? 1 : 0);
     gl.uniform2f(divergenceProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
     gl.uniform1i(divergenceProgram.uniforms.uVelocity, velocity.read.attach(0));
     blit(divergence);
@@ -1381,7 +1412,7 @@ function correctDeltaY (delta) {
 }
 
 function generateColor () {
-    let c = HSVtoRGB(Math.random(), 1.0, 1.0);
+    let c = HSVtoRGB(config.HUE < 0 ? Math.random() : (config.HUE + Math.random()*config.HUE_RANGE)%1, 1.0, 1.0);
     c.r *= 0.15;
     c.g *= 0.15;
     c.b *= 0.15;
@@ -1462,6 +1493,60 @@ function hashCode (s) {
     }
     return hash;
 };
+function createStudio(){
+ const defaults={...config};
+ const names=['Arcoíris','Océano','Nebulosa','Fuego','Aurora','Lava','Hielo','Esmeralda','Violeta','Oro','Tinta','Coral','Eléctrico','Jade','Atardecer','Remolinos','Seda','Tormenta','Galaxia','Cobre','Plasma','Vapor','Magenta','Abismo','Prisma'];
+ const hues=[-1,.52,.72,.01,.38,.98,.48,.30,.75,.10,.61,.95,.55,.42,.04,-1,.82,.60,.68,.06,-1,.52,.88,.64,-1];
+ const panel=document.createElement('details');panel.id='fluidStudio';panel.hidden=true;
+ panel.innerHTML='<summary>Ajustes Fluid · galería y simulación</summary><p class="fluid-help">25 preajustes propios sobre el motor de Pavel Dobryakov. Recreación basada en tu referencia; no son los preajustes extraídos de la app.</p><div class="fluid-gallery" role="group" aria-label="Preajustes de fluidos"></div><div class="fluid-settings"></div><div class="fluid-actions"><button type="button" data-action="random">Aleatorio</button><button type="button" data-action="reset">Restablecer</button><button type="button" data-action="clear">Limpiar</button><button type="button" data-action="save">Guardar ajustes</button><button type="button" data-action="load">Cargar ajustes</button><button type="button" data-action="photo">Foto</button></div><p class="fluid-help" role="status" id="fluidStudioStatus">Toca el fluido para inyectar color y movimiento.</p>';
+ document.querySelector('.visual-area').insertBefore(panel,document.querySelector('.stage').nextSibling);
+ const style=document.createElement('style');style.textContent=`
+ #fluidStudio{margin:16px 0;background:#0b0b10;border:1px solid #33313e;border-radius:20px;padding:18px;color:#eee}#fluidStudio[hidden]{display:none}
+ #fluidStudio summary{cursor:pointer;font-size:18px;padding:8px}.fluid-help{font-size:12px;line-height:1.5;color:#aaa6ba}
+ .fluid-gallery{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:20px 0}.fluid-preset{background:none;border:1px solid transparent;border-radius:12px;color:#ccc;padding:5px 1px;font-size:10px;cursor:pointer}.fluid-preset[aria-pressed=true]{border-color:#d9aeff;background:#282032}.fluid-preset i{display:block;width:min(11vw,58px);height:min(11vw,58px);border-radius:50%;margin:0 auto 8px;background:radial-gradient(circle at 35% 30%,transparent 20%,#05040b 68%),conic-gradient(from 30deg,var(--a),#fff,var(--b),#12091f,var(--a));border:1px solid var(--a);box-shadow:0 0 10px var(--b),inset 0 0 12px #000}.fluid-settings{display:grid;gap:14px}.fluid-settings label{display:grid;grid-template-columns:minmax(90px,1fr) minmax(100px,1fr) 45px;align-items:center;gap:8px;font-size:13px}.fluid-settings input{width:100%;accent-color:#d8b4fe}.fluid-settings select{max-width:100%;background:#191820;color:#fff;padding:7px;border-radius:8px}.fluid-settings output{text-align:right;font-variant-numeric:tabular-nums;font-size:11px}.fluid-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:22px}.fluid-actions button{border:1px solid #666;background:#18161d;border-radius:12px;padding:11px;color:white;cursor:pointer}@media(min-width:700px){.fluid-gallery{grid-template-columns:repeat(10,1fr)}.fluid-settings{grid-template-columns:1fr 1fr;gap:18px 30px}}
+ `;document.head.append(style);
+ const controls=new Map(),settings=panel.querySelector('.fluid-settings'),out=panel.querySelector('#fluidStudioStatus');
+ const specs=[
+ ['DYE_RESOLUTION','Calidad',[[256,'Baja'],[384,'Móvil'],[512,'Media'],[640,'Alta'],[1024,'Súper alta']]],
+ ['TIME_SCALE','Tiempo',0,2,.05],['AUTO','Automático','check'],['SPLAT_RADIUS','Radio',.03,1,.01],
+ ['SIM_RESOLUTION','Tamaño',[[64,'64'],[128,'128'],[256,'256']]],
+ ['DENSITY_DISSIPATION','Disipación',0,4,.05],['VISCOSITY','Viscosidad',0,4,.05],['CURL','Vorticidad',0,60,1],['GRAVITY','Gravedad',-2,2,.05],
+ ['PRESSURE_ITERATIONS','Presión',[[10,'Suave'],[20,'Normal'],[40,'Alta']]],['WALL','Borde',[[1,'Pared'],[0,'Abierto']]],
+ ['BLOOM','Resplandor','check'],['BLOOM_INTENSITY','Luz',0,2,.05],['SUNRAYS','Rayos de luz','check'],['SHADING','Relieve','check'],['PAUSED','Pausa','check'],['HUE','Color · −1 multicolor',-1,.99,.01],['HUE_RANGE','Variación de color',0,1,.01]
+ ];
+ function apply(){
+  config.DYE_RESOLUTION=Math.min(config.DYE_RESOLUTION,ext.supportLinearFiltering?1024:512);
+  if(!ext.supportLinearFiltering){config.SHADING=false;config.BLOOM=false;config.SUNRAYS=false;}
+  updateKeywords();initFramebuffers();sync();
+ }
+ function sync(){for(const [key,{input,value}] of controls){if(input.type==='checkbox')input.checked=!!config[key];else input.value=Number(config[key]);value.textContent=input.type==='range'?Number(config[key]).toFixed(2):'';}}
+ for(const [key,title,min,max,step] of specs){
+  const row=document.createElement('label'),text=document.createElement('span'),value=document.createElement('output');text.textContent=title;
+  const input=document.createElement(Array.isArray(min)?'select':'input');input.id='fluid-setting-'+key;input.setAttribute('aria-label',title);
+  if(Array.isArray(min)){for(const [v,t] of min){const o=document.createElement('option');o.value=v;o.textContent=t;input.append(o);}}
+  else if(min==='check')input.type='checkbox';else{input.type='range';input.min=min;input.max=max;input.step=step;}
+  input.addEventListener('input',()=>{config[key]=input.type==='checkbox'?input.checked:key==='WALL'?!!Number(input.value):Number(input.value);sync();if(['SHADING','BLOOM','SUNRAYS'].includes(key))updateKeywords();});
+  input.addEventListener('change',()=>{if(['DYE_RESOLUTION','SIM_RESOLUTION'].includes(key))apply();});
+  row.append(text,input,value);settings.append(row);controls.set(key,{input,value});
+ }
+ function clear(){for(const f of [dye.read,dye.write,velocity.read,velocity.write,pressure.read,pressure.write]){gl.bindFramebuffer(gl.FRAMEBUFFER,f.fbo);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);}gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
+ function preset(i){
+  Object.assign(config,defaults,{HUE:hues[i],HUE_RANGE:.08+(i%4)*.08,CURL:[30,12,45,20,50][i%5],VISCOSITY:[.2,1.5,.05,2.5,.6][i%5],DENSITY_DISSIPATION:[.5,1.2,.3,2,.8][i%5],SPLAT_RADIUS:[.18,.35,.12,.45,.24][i%5],GRAVITY:i===3?-.7:i===5?.6:0,TIME_SCALE:[1,.7,1.3,.8,1.1][i%5]});
+  apply();clear();multipleSplats(8);
+  panel.querySelectorAll('.fluid-preset').forEach((b,j)=>b.setAttribute('aria-pressed',String(i===j)));out.textContent=names[i]+' · preajuste propio. Puedes editar todos los controles.';
+ }
+ names.forEach((name,i)=>{const b=document.createElement('button');b.type='button';b.className='fluid-preset';b.setAttribute('aria-pressed','false');b.setAttribute('aria-label',name);const h=hues[i]<0?i*27:hues[i]*360;b.style.setProperty('--a',`hsl(${h},100%,70%)`);b.style.setProperty('--b',`hsl(${h+95},90%,45%)`);b.innerHTML='<i aria-hidden="true"></i>';b.append(document.createTextNode(name));b.onclick=()=>preset(i);panel.querySelector('.fluid-gallery').append(b);});
+ panel.querySelector('.fluid-actions').onclick=e=>{
+  const action=e.target.dataset.action;if(!action)return;
+  if(action==='random')preset(Math.floor(Math.random()*names.length));
+  if(action==='reset'){Object.assign(config,defaults);apply();clear();multipleSplats(8);panel.querySelectorAll('.fluid-preset').forEach(b=>b.setAttribute('aria-pressed','false'));out.textContent='Ajustes iniciales restaurados.';}
+  if(action==='clear')clear();
+  if(action==='save'){try{localStorage.setItem('sinestesia-fluid-settings-v1',JSON.stringify(config));out.textContent='Ajustes guardados en este dispositivo.';}catch{out.textContent='El navegador no permitió guardar los ajustes.';}}
+  if(action==='load'){try{const saved=JSON.parse(localStorage.getItem('sinestesia-fluid-settings-v1'));if(!saved){out.textContent='Todavía no hay ajustes guardados.';return;}for(const [key,,min,max] of specs){if(min==='check'){if(typeof saved[key]==='boolean')config[key]=saved[key];}else if(Array.isArray(min)){const v=Number(saved[key]);if(min.some(o=>o[0]===v))config[key]=key==='WALL'?!!v:v;}else if(Number.isFinite(saved[key]))config[key]=Math.max(min,Math.min(max,saved[key]));}apply();out.textContent='Ajustes cargados.';}catch{out.textContent='No se pudieron cargar los ajustes.';}}
+  if(action==='photo'){render(null);const a=document.createElement('a');a.download='sinestesia-fluid.png';a.href=canvas.toDataURL('image/png');a.click();}
+ };
+ sync();
+}
 function driveMusic(){
  const now=performance.now(), playing=typeof audio!=='undefined'&&!audio.paused;
  let signal={bass:0,mid:0,treble:0,kick:0};
@@ -1472,7 +1557,7 @@ function driveMusic(){
   lastBeat=now;multipleSplats(3);
  }
  previousKick=kick;
- if(now-lastInjection<(playing?85:900))return;
+ if(!config.AUTO || now-lastInjection<(playing?85:180))return;
  lastInjection=now;
  const t=now*0.0004, level=playing?Math.min(1,Number(signal.mid)||0):0.12;
  const color=generateColor(), strength=(playing?0.6+level*2:0.7)*gain;

@@ -77,7 +77,7 @@ jobs:
           test -f android/app/src/main/assets/public/plasma-webgl.js
           test -f android/app/src/main/assets/public/plasma-webgpu.js
           test -f android/app/src/main/assets/public/visual-intensity.js
-          grep -q "Plasma Ultra" android/app/src/main/assets/public/index.html
+          grep -q "plasma-webgl.js" android/app/src/main/assets/public/index.html
 
       - name: Build debug APK
         run: |
