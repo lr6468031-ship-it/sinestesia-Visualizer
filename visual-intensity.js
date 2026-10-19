@@ -32,11 +32,17 @@
       return { kick: true, snare: true, melody: true, bypass: true };
     }
     if (typeof analyser === 'undefined' || !analyser || typeof audioContext === 'undefined' || !audioContext || audio.paused) {
-      return { kick: false, snare: false, melody: false, bypass: false };
+      const state = { kick: false, snare: false, melody: false, bypass: false };
+      window.sinestesiaGateState = state;
+      return state;
     }
 
     const settings = window.sinestesiaDetectionSettings;
-    if (!settings) return { kick: false, snare: false, melody: false, bypass: false };
+    if (!settings) {
+      const state = { kick: false, snare: false, melody: false, bypass: false };
+      window.sinestesiaGateState = state;
+      return state;
+    }
 
     if (!gateSpectrum || gateSpectrum.length !== analyser.frequencyBinCount) {
       gateSpectrum = new Float32Array(analyser.frequencyBinCount);
@@ -101,7 +107,42 @@
     return { bass, mid, treble, energy, kick };
   };
 
+  // The renderers have their own idle animation (Fluid AUTO, Iris halo/noise and Plasma shader time).
+  // A strict visual shutter guarantees the stage is black until at least one XY gate is valid.
+  const selector = document.getElementById('visualMode');
+  const base = document.getElementById('visualizer');
+  const stage = base?.parentElement;
+  let gateMask = null;
+  const gatedModes = new Set(['plasma', 'fluidGas', 'pixels2021', 'electricIris']);
+
+  if (stage) {
+    gateMask = document.createElement('div');
+    gateMask.id = 'xyGateBlackout';
+    gateMask.setAttribute('aria-hidden', 'true');
+    Object.assign(gateMask.style, {
+      position: 'absolute',
+      inset: '0',
+      background: '#000',
+      zIndex: '99',
+      pointerEvents: 'none',
+      display: 'none',
+    });
+    stage.appendChild(gateMask);
+  }
+
+  function syncGateMask() {
+    if (gateMask) {
+      const mode = selector?.value || '';
+      const applies = gatedModes.has(mode) && window.sinestesiaAnalysisMode !== 'separation';
+      const gates = applies ? gateState() : { kick: true, snare: true, melody: true, bypass: true };
+      const open = !!(gates.bypass || gates.kick || gates.snare || gates.melody);
+      gateMask.style.display = applies && !open ? 'block' : 'none';
+    }
+    requestAnimationFrame(syncGateMask);
+  }
+
   intensity.addEventListener('input', applyIntensityUI);
   intensity.addEventListener('change', applyIntensityUI);
   applyIntensityUI();
+  syncGateMask();
 })();
