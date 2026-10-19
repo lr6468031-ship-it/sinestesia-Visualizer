@@ -30,6 +30,18 @@ if (!existsSync(model) || await digest(model, 'sha256') !== modelHash) {
 }
 const assets = ['index.html','app.js','styles.css','bass-wave.js','plasma-visualizer.js','plasma-ultra-tuning.js','fluid-visualizer.js','particles-fluid-presets.js','fluid-extra-modes.js','fluid-cleanup.js','reference-modes.js','lagrangian-visualizer.js','electric-iris.js','gamemaker-particles.js','panorama.js','visual-intensity.js','plasma-webgl.js','plasma-webgpu.js','controls.css','controls.js','separation.js','stem-routing.js','separation-dsp.js','THIRD_PARTY.md'];
 for (const file of assets) await copyFile(join(root,file), join(out,file));
+
+// In normal FFT mode, keep Fluid's background drift independent from raw audio energy.
+// Strong splats are already triggered above by signal.kick, whose onset detector is gated
+// by the K detection box. This prevents false rhythmic pulses when no peak enters the box.
+const fluidOutput = join(out, 'fluid-visualizer.js');
+let fluidText = await readFile(fluidOutput, 'utf8');
+const oldFluidDrive = ` const t=now*0.0004, level=playing?Math.min(1,Number(signal.mid)||0):0.12;\n const color=generateColor(), strength=(window.sinestesiaAnalysisMode==='separation' ? level*2 : (playing?0.6+level*2:0.7))*gain;\n color.r*=strength;color.g*=strength;color.b*=strength;\n splat(0.5+Math.cos(t*2.7)*0.23,0.5+Math.sin(t*3.1)*0.23,-Math.sin(t*2.7)*(80+level*220),Math.cos(t*3.1)*(80+level*220),color);`;
+const newFluidDrive = ` const t=now*0.0004, level=playing?Math.min(1,Number(signal.mid)||0):0.12;\n const separated=window.sinestesiaAnalysisMode==='separation';\n const motionLevel=separated?level:0;\n const color=generateColor(), strength=(separated?level*2:(playing?0.18:0.12))*gain;\n color.r*=strength;color.g*=strength;color.b*=strength;\n splat(0.5+Math.cos(t*2.7)*0.23,0.5+Math.sin(t*3.1)*0.23,-Math.sin(t*2.7)*(80+motionLevel*220),Math.cos(t*3.1)*(80+motionLevel*220),color);`;
+if (!fluidText.includes(oldFluidDrive)) throw new Error('Fluid music drive patch target not found');
+fluidText = fluidText.replace(oldFluidDrive, newFluidDrive);
+await writeFile(fluidOutput, fluidText);
+
 await mkdir(join(out,'vendor/lagrangian'), { recursive: true });
 await copyFile(join(root,'vendor/lagrangian/LICENSE'), join(out,'vendor/lagrangian/LICENSE'));
 await cp(join(root,'vendor/gamemaker-particles'), join(out,'vendor/gamemaker-particles'), { recursive: true });
