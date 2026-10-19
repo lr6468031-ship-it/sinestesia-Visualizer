@@ -7,6 +7,7 @@
   <title>Sinestesia Visualizer</title>
   <link rel="stylesheet" href="styles.css?v=20261017-fluidgas1" />
   <link rel="stylesheet" href="controls.css?v=20261018-panorama1" />
+<style>#spectrumEditor[hidden],#separationEditor[hidden]{display:none!important} #separateResults{display:flex;flex-direction:column;gap:12px} #separateResults .stem-row{display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box}</style>
 </head>
 <body>
   <main class="app">
@@ -22,8 +23,7 @@
         <label>Velocidad <input id="playbackSpeed" type="range" min="0.5" max="1.25" step="0.05" value="1" /><output id="playbackSpeedValue">1.00×</output></label>
         <small id="bpmValue">BPM aprox. · esperando golpes regulares</small>
         <small id="visualNotice" role="status"></small>
-        <a class="spectrum-shortcut" href="#spectrumEditor">⚙ Configurar espectrograma · K / S / M</a>
-        <a class="spectrum-shortcut" href="#separationEditor">Separar instrumentos · IA</a>
+        <label>Reacción a la música <select id="audioAnalysisMode"><option value="spectrum">Espectrograma</option><option value="separation">Separar música</option></select></label>
       </div>
     </header>
 
@@ -102,7 +102,7 @@
         </div>
       </section>
 
-      <section id="separationEditor" class="spectrum-card separator-card" aria-label="Separación de instrumentos con inteligencia artificial">
+      <section id="separationEditor" hidden class="spectrum-card separator-card" aria-label="Separación de instrumentos con inteligencia artificial">
         <h2 class="spectrum-title">Separar instrumentos · IA</h2>
         <p class="spectrum-help">Demucs separa voz, batería, bajo y resto melódico. La canción se procesa en tu dispositivo: no se sube. Descarga inicial del modelo: unos 174 MB. Trabaja por fragmentos, no en tiempo real. Puedes seguir escuchando mientras se prepara; las pistas aparecerán aquí debajo. En móvil puede tardar y usar mucha memoria.</p>
         <div class="separation-options">
@@ -115,7 +115,7 @@
         <p id="separateStatus" class="spectrum-help" role="status">Primero carga una canción.</p>
         <section id="separateOutput" class="separate-output" hidden tabindex="-1" aria-labelledby="separateOutputTitle">
           <h3 id="separateOutputTitle">Tus pistas separadas · 7 cuadrículas</h3>
-          <p class="spectrum-help">Pulsa Escuchar en cualquier cuadrícula: la pista suena aquí mismo y el aro la analiza. Usa WAV para descargarla.</p>
+          <p class="spectrum-help">Pulsa Escuchar en cualquier cuadrícula: la pista suena aquí mismo y el aro la analiza. Las pistas son temporales: no necesitas guardarlas. Al volver a Espectrograma se descartan.</p>
           <div id="separateResults" aria-label="Pistas separadas"></div>
         </section>
         <p class="spectrum-help">Kick, snare y platillos se ofrecen como bandas estimadas de la batería. Piano y sintetizadores permanecen en «Otros»; los vocal chops pueden quedar en voz u otros. No se aíslan todos los instrumentos por separado. Modelo para uso personal e investigación. <a href="THIRD_PARTY.md">Modelos, licencias y límites</a>.</p>
@@ -151,7 +151,7 @@
   <script src="lagrangian-visualizer.js?v=20261018-rk4"></script>
   <script src="electric-iris.js?v=20261018-iris1"></script>
   <script src="panorama.js?v=20261018-gm1"></script>
-  <script src="controls.js?v=20261017-fluidgas1"></script>
-  <script type="module" src="separation.js?v=20261017-fluidgas1"></script>
+  <script src="controls.js?v=20261019-analysis-modes1"></script>
+  <script type="module" src="separation.js?v=20261019-analysis-modes1"></script>
 </body>
 </html>
