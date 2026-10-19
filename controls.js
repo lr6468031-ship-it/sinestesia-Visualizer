@@ -126,7 +126,10 @@ function smoothSpectrumDb(values, position) {
       if (saved && Number.isFinite(saved[name])) settings[name] = Math.max(limits[name][0], Math.min(limits[name][1], saved[name]));
     }
   } catch (_) { /* Storage may be unavailable; in-memory controls still work. */ }
-  window.sinestesiaDetectionSettings = settings;
+  Object.defineProperty(window, 'sinestesiaDetectionSettings', {
+    configurable: true,
+    get: () => window.sinestesiaAnalysisMode === 'separation' ? defaults : settings
+  });
   const fraction = hz => Math.max(0, Math.min(1, Math.log(hz / 20) / Math.log(800)));
   const hzAt = x => 20 * Math.pow(800, Math.max(0, Math.min(1, x)));
   const persist = () => { try { localStorage.setItem(key, JSON.stringify(settings)); } catch (_) {} };
@@ -227,7 +230,7 @@ function smoothSpectrumDb(values, position) {
   let lastRow = 0;
   let displayCurve = null;
   window.sinestesiaSpectrumFrame = (spectrum, sampleRate, now) => {
-    if (panel.hidden || now - lastRow < 16) return;
+    if (window.sinestesiaAnalysisMode === 'separation' || panel.hidden || now - lastRow < 16) return;
     const elapsed = lastRow ? Math.min(100, now - lastRow) : 16;
     lastRow = now;
     const dpr = Math.min(devicePixelRatio || 1, 3);
