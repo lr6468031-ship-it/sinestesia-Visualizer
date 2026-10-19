@@ -4,6 +4,48 @@
   const progress = document.getElementById('separateProgress'), message = document.getElementById('separateStatus');
   const results = document.getElementById('separateResults'), original = document.getElementById('separateOriginal');
   const output = document.getElementById('separateOutput'), jump = document.getElementById('separateJump');
+  const mode = document.getElementById('audioAnalysisMode');
+  window.sinestesiaAnalysisMode = 'spectrum';
+  function applyMode() {
+    const separating = mode.value === 'separation';
+    window.sinestesiaAnalysisMode = mode.value;
+    document.getElementById('spectrumEditor').hidden = separating;
+    document.getElementById('separationEditor').hidden = !separating;
+    if (!separating) {
+      stop('Modo espectrograma activo.');
+      player.pause();
+      if (typeof currentObjectUrl !== 'undefined' && currentObjectUrl) {
+        player.src = currentObjectUrl; player.load();
+      }
+      release();
+      const name = input.files?.[0]?.name || 'Sin canción';
+      document.getElementById('trackName').textContent = name;
+      document.getElementById('compactTrack').textContent = name;
+    }
+    if (typeof resetVisualState === 'function') resetVisualState();
+    window.dispatchEvent(new Event('sinestesia-detection-change'));
+  }
+  mode.addEventListener('change', applyMode);
+  async function waveform(blob, label) {
+    const decoder = new OfflineAudioContext(1, 1, 22050);
+    const buffer = await decoder.decodeAudioData(await blob.arrayBuffer());
+    const samples = buffer.getChannelData(0);
+    const canvas = document.createElement('canvas');
+    canvas.width = 1000; canvas.height = 100;
+    canvas.style.cssText = 'width:100%;height:72px;display:block;background:#11262e;border-radius:8px';
+    canvas.setAttribute('role','img');
+    canvas.setAttribute('aria-label','Forma de onda de ' + label);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#62dbe7';
+    const stride = Math.max(1, Math.ceil(samples.length / canvas.width));
+    for (let x=0;x<canvas.width;x++) {
+      let peak=0;
+      for(let i=x*stride;i<Math.min(samples.length,(x+1)*stride);i++) peak=Math.max(peak,Math.abs(samples[i]));
+      const height=Math.max(1,Math.min(1,peak)*96);
+      ctx.fillRect(x,50-height/2,1,height);
+    }
+    return canvas;
+  }
   jump.addEventListener('click',()=>{output.scrollIntoView({behavior:'smooth',block:'start'});output.focus({preventScroll:true});});
   const duration = document.getElementById('separateDuration'), from = document.getElementById('separateFrom');
   const labels = { drums:'Batería · IA',bass:'Bajo · IA',other:'Otros / melodía · IA',vocals:'Voz · IA',kickEstimate:'Kick · banda estimada',snareEstimate:'Snare · banda estimada',cymbalEstimate:'Platillos · banda estimada' };
@@ -22,7 +64,7 @@
   }
   original.addEventListener('click',()=>{if(originalUrl)listen(originalUrl,`${selectedFile.name} · original`);});
   start.addEventListener('click',async()=>{
-    const file=input.files?.[0];if(!file)return;
+    const file=input.files?.[0];if(!file || window.sinestesiaAnalysisMode !== 'separation')return;
     stop();release();selectedFile=file;const token=generation;
     start.disabled=true;cancel.disabled=false;duration.disabled=true;from.disabled=true;progress.hidden=false;progress.removeAttribute('value');
     window.sinestesiaSeparating=true;
@@ -30,7 +72,7 @@
     for(const label of Object.values(labels)) {
       const row=document.createElement('article');row.className='stem-row';
       const title=document.createElement('h4');title.textContent=label;
-      const detail=document.createElement('p');detail.className='stem-description';detail.textContent='En preparación… Aquí podrás escuchar y descargar esta pista.';
+      const detail=document.createElement('p');detail.className='stem-description';detail.textContent='En preparación… Aquí aparecerá la onda de esta pista.';
       row.append(title,detail);results.append(row);
     }
     output.scrollIntoView({behavior:'smooth',block:'start'});
@@ -62,7 +104,7 @@
           try {
             const names=Object.keys(labels);
             if(!data.wavs || names.some(name=>!(data.wavs[name] instanceof Blob)))throw Error('La separación no devolvió todas las pistas.');
-            message.textContent='Preparando las cuadrículas y los WAV…';
+            message.textContent='Dibujando las ondas de las pistas…';
             progress.value=0;
             const pending=document.createDocumentFragment();
             for(const [index,name] of names.entries()){
@@ -75,8 +117,9 @@
                 results.querySelectorAll('article').forEach(card=>card.classList.remove('is-playing'));
                 row.classList.add('is-playing');listen(url,`${file.name} · ${labels[name]}`);
               });
-              const link=document.createElement('a');link.href=url;link.download=`${file.name.replace(/\.[^.]+$/,'')}_${offset}s_${name}.wav`;link.textContent='↓ WAV';link.setAttribute('aria-label',`Descargar ${labels[name]}`);
-              row.append(title,description,button,link);pending.append(row);
+              const wave=await waveform(data.wavs[name],labels[name]);
+              if(token!==generation)return;
+              row.append(title,description,wave,button);pending.append(row);
               progress.value=(index+1)/names.length;
               message.textContent=`Preparando pistas ${index+1}/${names.length}…`;
               await new Promise(resolve=>setTimeout(resolve,0));
@@ -94,5 +137,6 @@
       worker.postMessage({type:'separate',channelData,engine:document.getElementById('separateEngine').value},channelData.map(c=>c.buffer));
     }catch(error){if(token===generation){release();stop(`No se pudo preparar el audio: ${error.message}`);}}
   });
+  applyMode();
   window.addEventListener('beforeunload',()=>{worker?.terminate();release();});
 })();
