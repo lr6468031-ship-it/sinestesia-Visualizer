@@ -16,7 +16,7 @@
         <h1>Audio Visualizer</h1>
       </div>
       <div class="visual-options">
-        <label>Estilo <select id="visualMode"><option value="plasma" selected>Plasma · Ritmo + Melodía</option><option value="fluidGas">Fluid · Galería y ajustes</option><option value="gameMaker">Partículas · Todos los diseños</option><option value="electricIris">Iris eléctrico · Filamentos y partículas</option><option value="lagrangian:vortex">Lagrangiano · Vórtice</option><option value="lagrangian:currents">Lagrangiano · Corrientes</option><option value="lagrangian:turbulence">Lagrangiano · Turbulencia</option></select></label>
+        <label>Estilo <select id="visualMode"><option value="plasma" selected>Plasma · Ritmo + Melodía</option><option value="fluidGas">Fluid · Galería y ajustes</option><option value="electricIris">Iris eléctrico · Filamentos y partículas</option><option value="lagrangian:vortex">Lagrangiano · Vórtice</option><option value="lagrangian:currents">Lagrangiano · Corrientes</option><option value="lagrangian:turbulence">Lagrangiano · Turbulencia</option></select></label>
         <label>Intensidad <input id="fluidIntensity" type="range" min="0.7" max="2" step="0.05" value="1.35" /></label>
         <label hidden style="display:none">Velocidad del flujo <input id="colorSpeed" type="range" min="0.2" max="4" step="0.1" value="1.6" /></label>
         <label>Velocidad <input id="playbackSpeed" type="range" min="0.5" max="1.25" step="0.05" value="1" /><output id="playbackSpeedValue">1.00×</output></label>
@@ -31,16 +31,6 @@
       <div class="stage" aria-label="Visualizador de audio">
         <canvas id="visualizer"></canvas>
         <div class="panorama-toolbar" role="group" aria-label="Vista y diseño del visualizador">
-          <label id="particleDesignControl" hidden>Diseño
-            <select id="particleDesign">
-              <option value="all">Panorama · Todos</option>
-              <option value="rain">Lluvia azul</option>
-              <option value="flame">Fuego y humo</option>
-              <option value="smoke">Humo</option>
-              <option value="stars">Campo de estrellas</option>
-              <option value="classic">Partículas clásicas</option>
-            </select>
-          </label>
           <button id="panoramaToggle" type="button" aria-pressed="false">Pantalla completa</button>
         </div>
 
@@ -156,7 +146,6 @@
   <script src="fluid-visualizer.js?v=20261019-studio1"></script>
   <script src="lagrangian-visualizer.js?v=20261018-rk4"></script>
   <script src="electric-iris.js?v=20261018-iris1"></script>
-  <script src="gamemaker-particles.js?v=20261018-gm1"></script>
   <script src="panorama.js?v=20261018-gm1"></script>
   <script src="controls.js?v=20261017-fluidgas1"></script>
   <script type="module" src="separation.js?v=20261017-fluidgas1"></script>
