@@ -28,6 +28,13 @@ SOFTWARE.
 'use strict';
 const selector=document.getElementById('visualMode'), base=document.getElementById('visualizer');
 if(!selector||!base)return;
+// User-authorized adaptation: the original binary preset has no field schema.
+// Preserve it verbatim; the renderer settings below are our own, not decoded labels.
+const pixels2021Source = 'CgtQaXhlbHMgMjAyMRBAGAUgAS3NzEw/NZqZGT84AWABbQAAAENwAX0K1yM8nQEAAPBBpQEAAAA/rQEAAAA/tQHNzEw+uAEBzQHNzMw82AED5QEAAIA/6AEE8gEFDTMzcz/yAQUNmpkZP/0BXI/CPoUCKVwPP40CH4UrP50CmpkZPqUCzcxMPrACAb0CAACAP8ACeNACAeACAe0CzczMPf0CAAAAP4UDAAAAP40DmpmZPpADAZ0DAADAP6UDAACAP60DzczMPc0DzczMPdUDAACgQN0DAAAAP+ADQPUDCtejPP0DAACAP4UEAAAAP40EmpmZPpAEAqUEzcxMPfjwBAI=';
+const pixelsOption=document.createElement('option');
+pixelsOption.value='pixels2021';pixelsOption.textContent='Pixels 2021 · Musical';
+selector.append(pixelsOption);
+let applyMode=()=>{};
 const stage=base.parentElement, notice=document.getElementById('visualNotice');
 const fluidCanvas=document.createElement('canvas');
 fluidCanvas.id='fluidGasCanvas';
@@ -36,19 +43,21 @@ Object.assign(fluidCanvas.style,{position:'absolute',inset:'0',width:'100%',heig
 stage.insertBefore(fluidCanvas,base.nextSibling);
 let ready=false, active=false, lastInjection=0, lastBeat=0, previousKick=0;
 function choose(){
- active=selector.value==='fluidGas'&&ready;
+ active=['fluidGas','pixels2021'].includes(selector.value)&&ready;
+ if(ready)applyMode();
  fluidCanvas.hidden=!active;fluidCanvas.style.display=active?'block':'none';
  window.sinestesiaFluidGasActive=active;
  base.style.visibility=active||window.sinestesiaPlasmaWebGLActive?'hidden':'visible';
  if(active&&notice)notice.textContent='Fluid · toca y arrastra. Abre Ajustes Fluid para elegir un preajuste.';
- document.getElementById('fluidStudio')?.toggleAttribute('hidden',!active);
+ if(active&&selector.value==='pixels2021'&&notice)notice.textContent='Pixels 2021 · adaptación musical. Arrastra para mover el color.';
+ document.getElementById('fluidStudio')?.toggleAttribute('hidden',!active||selector.value==='pixels2021');
 }
 function fail(error){
  ready=false;choose();
  const option=selector.querySelector('option[value="fluidGas"]');
- if(option)option.disabled=true;
+ if(option)option.disabled=true;pixelsOption.disabled=true;
  console.error('Fluido Gas:',error);
- if(selector.value==='fluidGas'){
+ if(['fluidGas','pixels2021'].includes(selector.value)){
   selector.value='plasma';selector.dispatchEvent(new Event('change'));
  }
  if(notice)notice.textContent='Fluido Gas no pudo iniciar en este navegador. Se muestra Plasma. '+String(error.message||error);
@@ -428,6 +437,7 @@ const displayShaderSource = `
     uniform sampler2D uBloom;
     uniform sampler2D uSunrays;
     uniform sampler2D uDithering;
+    uniform vec2 pixelGrid;
     uniform vec2 ditherScale;
     uniform vec2 texelSize;
 
@@ -437,7 +447,8 @@ const displayShaderSource = `
     }
 
     void main () {
-        vec3 c = texture2D(uTexture, vUv).rgb;
+        vec2 uv = pixelGrid.x > 0.0 ? (floor(vUv * pixelGrid) + 0.5) / pixelGrid : vUv;
+        vec3 c = texture2D(uTexture, uv).rgb;
 
     #ifdef SHADING
         vec3 lc = texture2D(uTexture, vL).rgb;
@@ -1052,6 +1063,25 @@ multipleSplats(8);
 let lastUpdateTime = Date.now();
 let colorUpdateTimer = 0.0;
 createStudio();
+let fluidSettings=null;
+applyMode=()=>{
+ const pixels=selector.value==='pixels2021';
+ if(pixels&&!fluidSettings){
+  fluidSettings={...config};
+  Object.assign(config,{SIM_RESOLUTION:128,DYE_RESOLUTION:256,
+   AUTO:true,PAUSED:false,TIME_SCALE:1,HUE:-1,HUE_RANGE:1,
+   CURL:30,VISCOSITY:0.2,DENSITY_DISSIPATION:0.6,SPLAT_RADIUS:0.12,
+   SHADING:false,BLOOM:false,SUNRAYS:false,GRAVITY:0});
+ }else if(!pixels&&fluidSettings){
+  Object.assign(config,fluidSettings);fluidSettings=null;
+ }else return;
+ updateKeywords();initFramebuffers();
+ for(const f of [dye.read,dye.write,velocity.read,velocity.write,pressure.read,pressure.write]){
+  gl.bindFramebuffer(gl.FRAMEBUFFER,f.fbo);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);
+ }
+ gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+ previousKick=0;lastBeat=0;lastInjection=0;multipleSplats(8);
+};
 ready = true;
 choose();
 update();
@@ -1230,6 +1260,9 @@ function drawDisplay (target) {
     let height = target == null ? gl.drawingBufferHeight : target.height;
 
     displayMaterial.bind();
+    const pixelated=selector.value==='pixels2021';
+    const aspect=canvas.width/Math.max(1,canvas.height);
+    gl.uniform2f(displayMaterial.uniforms.pixelGrid,pixelated?64*Math.max(1,aspect):0,pixelated?64/Math.min(1,aspect):0);
     if (config.SHADING)
         gl.uniform2f(displayMaterial.uniforms.texelSize, 1.0 / width, 1.0 / height);
     gl.uniform1i(displayMaterial.uniforms.uTexture, dye.read.attach(0));
