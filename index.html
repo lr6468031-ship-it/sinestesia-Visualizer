@@ -23,7 +23,7 @@
         <label>Velocidad <input id="playbackSpeed" type="range" min="0.5" max="1.25" step="0.05" value="1" /><output id="playbackSpeedValue">1.00×</output></label>
         <small id="bpmValue">BPM aprox. · esperando golpes regulares</small>
         <small id="visualNotice" role="status"></small>
-        <label>Reacción a la música <select id="audioAnalysisMode"><option value="spectrum">Espectrograma</option><option value="separation">Separar música</option></select></label>
+        <label>Modo de detección <select id="audioAnalysisMode"><option value="spectrum">1 · Frecuencias / espectrograma</option><option value="separation">2 · Separación de música / pistas</option></select></label>
       </div>
     </header>
 
@@ -72,7 +72,7 @@
       </div>
 
       <section id="spectrumEditor" class="spectrum-card" aria-label="Ajustar detección por frecuencia">
-        <h2 class="spectrum-title">Analizador XY · Ajustar efectos</h2>
+        <h2 class="spectrum-title">Modo 1 · Frecuencias / espectrograma</h2>
         <button id="spectrumToggle" class="spectrum-toggle" type="button" aria-expanded="true" aria-controls="spectrumPanel">Ocultar espectrograma</button>
         <div id="spectrumPanel">
           <p class="spectrum-help">X = frecuencia. Y = nivel en dBFS: arriba es más fuerte. Arrastra K, S o M en ambos ejes. Solo se aceptan ataques cuyo pico en la banda elegida esté dentro del rectángulo, entre sus límites mínimo y máximo; fuera se rechazan.</p>
@@ -103,22 +103,22 @@
       </section>
 
       <section id="separationEditor" hidden class="spectrum-card separator-card" aria-label="Separación de instrumentos con inteligencia artificial">
-        <h2 class="spectrum-title">Separar instrumentos · IA</h2>
-        <p class="spectrum-help">Demucs separa voz, batería, bajo y resto melódico. La canción se procesa en tu dispositivo: no se sube. Descarga inicial del modelo: unos 174 MB. Trabaja por fragmentos, no en tiempo real. Puedes seguir escuchando mientras se prepara; las pistas aparecerán aquí debajo. En móvil puede tardar y usar mucha memoria.</p>
+        <h2 class="spectrum-title">Modo 2 · Separación de música / pistas</h2>
+        <p class="spectrum-help">Primero procesa la canción con IA. Después aparecerá una mesa multipista con cada sección separada y su forma de onda. Tú eliges manualmente qué visual corresponde a cada pista. La canción se procesa en tu dispositivo; no se sube.</p>
         <div class="separation-options">
           <label>Motor IA <select id="separateEngine"><option value="auto">Automático · GPU o CPU</option><option value="cpu">CPU compatible · sin WebGPU</option></select></label>
           <label>Inicio · segundos <input id="separateFrom" type="number" min="0" step="1" value="0" /></label>
           <label>Fragmento <select id="separateDuration"><option value="15" selected>15 segundos</option><option value="30">30 segundos</option><option value="60">60 segundos</option><option value="full">Hasta 5 minutos</option></select></label>
         </div>
-        <div class="separation-actions"><button id="separateChoose" type="button">Cargar canción</button><button id="separateStart" type="button" disabled>Separar con IA</button><button id="separateCancel" type="button" disabled>Cancelar</button><button id="separateJump" type="button" hidden>Ver pistas separadas</button><button id="separateOriginal" type="button" hidden>Escuchar original</button></div>
+        <div class="separation-actions"><button id="separateChoose" type="button">Cargar canción</button><button id="separateStart" type="button" disabled>Separar con IA</button><button id="separateCancel" type="button" disabled>Cancelar</button><button id="separateJump" type="button" hidden>Ver mesa multipista</button><button id="separateOriginal" type="button" hidden>Escuchar original</button></div>
         <progress id="separateProgress" max="1" hidden aria-label="Progreso de separación"></progress>
         <p id="separateStatus" class="spectrum-help" role="status">Primero carga una canción.</p>
         <section id="separateOutput" class="separate-output" hidden tabindex="-1" aria-labelledby="separateOutputTitle">
-          <h3 id="separateOutputTitle">Tus pistas separadas · 7 cuadrículas</h3>
-          <p class="spectrum-help">Elige un fluido en cada cuadrícula. Pulsa «Canción con todos los fluidos» para verlos juntos, o «Escuchar» para probar una pista. Varios instrumentos asignados al mismo fluido comparten ese efecto. Solo reacciona el fragmento procesado. Las pistas son temporales: no necesitas guardarlas. Al volver a Espectrograma se descartan.</p>
+          <h3 id="separateOutputTitle">Mesa multipista · asignación manual de visuales</h3>
+          <p class="spectrum-help">Cada fila corresponde a una pista o banda separada. Escúchala si quieres comprobarla y luego selecciona el visual que debe reaccionar a esa pista.</p>
           <div id="separateResults" aria-label="Pistas separadas"></div>
         </section>
-        <p class="spectrum-help">Kick, snare y platillos se ofrecen como bandas estimadas de la batería. Piano y sintetizadores permanecen en «Otros»; los vocal chops pueden quedar en voz u otros. No se aíslan todos los instrumentos por separado. Modelo para uso personal e investigación. <a href="THIRD_PARTY.md">Modelos, licencias y límites</a>.</p>
+        <p class="spectrum-help">La IA separa batería, bajo, voz y otros/melodía; además se generan bandas estimadas para kick, snare y platillos. Esas estimaciones no equivalen a stems perfectos, pero sirven para asignar reacciones visuales más específicas.</p>
       </section>
 
       <div class="meter-card" aria-label="Niveles de frecuencia">
@@ -154,7 +154,7 @@
   <script src="particles-engine.js?v=20261019-apk-engine1"></script>
   <script src="panorama.js?v=20261018-gm1"></script>
   <script src="controls.js?v=20261019-analysis-modes2"></script>
-  <script type="module" src="separation.js?v=20261019-stem-router1"></script>
+  <script type="module" src="separation.js?v=20261019-multitrack1"></script>
   <script src="strict-xy-runtime.js?v=20261019-gate5"></script>
 </body>
 </html>
