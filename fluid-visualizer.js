@@ -34,6 +34,18 @@ const pixels2021Source = 'CgtQaXhlbHMgMjAyMRBAGAUgAS3NzEw/NZqZGT84AWABbQAAAENwAX
 const pixelsOption=document.createElement('option');
 pixelsOption.value='pixels2021';pixelsOption.textContent='Pixels 2021 · Musical';
 selector.append(pixelsOption);
+// Three original presets tuned against VID_20261020_111401.mp4.
+const videoModes = [
+ {id:'fluid:prism',name:'Prisma · Cinta de destellos',style:1,hue:45,settings:{REFERENCE_EXPOSURE:1.6,HUE:-1,HUE_RANGE:1,CURL:22,VISCOSITY:.12,DENSITY_DISSIPATION:.75,VELOCITY_DISSIPATION:.35,SPLAT_RADIUS:.10,SPLAT_FORCE:4200,TIME_SCALE:.75,BLOOM:false,SUNRAYS:false,SHADING:false}},
+ {id:'fluid:aurora',name:'Aurora · Fluido neón',style:2,hue:275,settings:{REFERENCE_EXPOSURE:1.4,HUE:.56,HUE_RANGE:.26,CURL:38,VISCOSITY:.3,DENSITY_DISSIPATION:.55,VELOCITY_DISSIPATION:.3,SPLAT_RADIUS:.23,SPLAT_FORCE:5200,TIME_SCALE:.8,BLOOM:true,BLOOM_INTENSITY:.65,BLOOM_THRESHOLD:.6,SUNRAYS:false,SHADING:true}},
+ {id:'fluid:circuit',name:'Circuitos · Trazos cuadrados',style:3,hue:245,settings:{REFERENCE_EXPOSURE:.8,GRID_SIZE:100,HUE:.64,HUE_RANGE:.23,CURL:26,VISCOSITY:.08,DENSITY_DISSIPATION:.85,VELOCITY_DISSIPATION:.3,SPLAT_RADIUS:.16,SPLAT_FORCE:4800,TIME_SCALE:.7,BLOOM:false,SUNRAYS:false,SHADING:false}}
+];
+for (const mode of videoModes) {
+ const option=document.createElement('option');option.value=mode.id;option.textContent=mode.name;selector.append(option);
+}
+const isFluidMode=()=>['fluidGas','pixels2021',...videoModes.map(m=>m.id)].includes(selector.value);
+window.sinestesiaVideoFluidModes=videoModes.map(({id,name,hue})=>({id,name,hue}));
+let syncStudio=()=>{};
 let applyMode=()=>{};
 const stage=base.parentElement, notice=document.getElementById('visualNotice');
 const fluidCanvas=document.createElement('canvas');
@@ -43,13 +55,15 @@ Object.assign(fluidCanvas.style,{position:'absolute',inset:'0',width:'100%',heig
 stage.insertBefore(fluidCanvas,base.nextSibling);
 let ready=false, active=false, lastInjection=0, lastBeat=0, previousKick=0;
 function choose(){
- active=(window.sinestesiaAnalysisMode === 'separation' ? window.sinestesiaStemRouter.active('fluidGas') : ['fluidGas','pixels2021'].includes(selector.value))&&ready;
+ active=(window.sinestesiaAnalysisMode === 'separation' ? window.sinestesiaStemRouter.active('fluidGas') : isFluidMode())&&ready;
  if(ready)applyMode();
  fluidCanvas.hidden=!active;fluidCanvas.style.display=active?'block':'none';
  window.sinestesiaFluidGasActive=active;
  base.style.visibility=active||window.sinestesiaPlasmaWebGLActive?'hidden':'visible';
  if(active&&notice)notice.textContent='Fluid · toca y arrastra. Abre Ajustes Fluid para elegir un preajuste.';
  if(active&&selector.value==='pixels2021'&&notice)notice.textContent='Pixels 2021 · adaptación musical. Arrastra para mover el color.';
+ const videoMode=videoModes.find(m=>m.id===selector.value);
+ if(active&&videoMode&&notice)notice.textContent=videoMode.name+' · toca y arrastra; abre Ajustes Fluid para modificar el flujo y la luz.';
  document.getElementById('fluidStudio')?.toggleAttribute('hidden',!active||selector.value==='pixels2021');
 }
 function fail(error){
@@ -57,7 +71,7 @@ function fail(error){
  const option=selector.querySelector('option[value="fluidGas"]');
  if(option)option.disabled=true;pixelsOption.disabled=true;
  console.error('Fluido Gas:',error);
- if(['fluidGas','pixels2021'].includes(selector.value)){
+ if(isFluidMode()){
   selector.value='plasma';selector.dispatchEvent(new Event('change'));
  }
  if(notice)notice.textContent='Fluido Gas no pudo iniciar en este navegador. Se muestra Plasma. '+String(error.message||error);
@@ -71,7 +85,7 @@ const canvas = fluidCanvas;
 resizeCanvas();
 
 let config = {
-    TIME_SCALE: 1, AUTO: true, VISCOSITY: 0.2, GRAVITY: 0, WALL: true, HUE: -1, HUE_RANGE: 0.15,
+    REFERENCE_EXPOSURE: 1, GRID_SIZE: 100, TIME_SCALE: 1, AUTO: true, VISCOSITY: 0.2, GRAVITY: 0, WALL: true, HUE: -1, HUE_RANGE: 0.15,
     SIM_RESOLUTION: 128,
     DYE_RESOLUTION: 640,
     CAPTURE_RESOLUTION: 512,
@@ -438,6 +452,9 @@ const displayShaderSource = `
     uniform sampler2D uSunrays;
     uniform sampler2D uDithering;
     uniform vec2 pixelGrid;
+    uniform float referenceStyle;
+    uniform float referenceExposure;
+    uniform sampler2D uVelocity;
     uniform vec2 ditherScale;
     uniform vec2 texelSize;
 
@@ -486,6 +503,34 @@ const displayShaderSource = `
         c += bloom;
     #endif
 
+        if (referenceStyle > 0.5) {
+            vec2 sampleStep = referenceStyle > 2.5 ? 1.0 / pixelGrid : texelSize * 2.0;
+            vec3 leftColor = texture2D(uTexture, uv - vec2(sampleStep.x, 0.0)).rgb;
+            vec3 downColor = texture2D(uTexture, uv - vec2(0.0, sampleStep.y)).rgb;
+            float edge = length(texture2D(uTexture, uv).rgb-leftColor) + length(texture2D(uTexture, uv).rgb-downColor);
+            if (referenceStyle < 1.5) {
+                // Fine short streaks aligned with the simulated velocity field.
+                vec2 velocity = texture2D(uVelocity, uv).xy;
+                vec2 direction = normalize(velocity + vec2(0.001));
+                vec2 pixel = gl_FragCoord.xy;
+                vec2 streak = vec2(dot(pixel, direction), dot(pixel, vec2(-direction.y,direction.x)));
+                vec2 cell = floor(streak / vec2(9.0,3.0));
+                float random = fract(sin(dot(cell,vec2(127.1,311.7)))*43758.5453);
+                float grain = step(0.82,random) * (1.0-smoothstep(0.55,1.0,abs(fract(streak.y/3.0)-0.5)*2.0));
+                c = pow(max(c,vec3(0.0)),vec3(0.35))*grain*(0.7+edge*6.0);
+                c += vec3(1.0,0.96,0.88)*grain*smoothstep(0.025,0.3,edge)*1.2;
+            } else if (referenceStyle < 2.5) {
+                c = c * 0.35 + normalize(c+vec3(0.001))*edge*1.6;
+                c += vec3(0.55,0.75,1.0)*smoothstep(0.12,0.7,edge)*0.8;
+                c = c/(vec3(0.45)+c);
+            } else {
+                vec2 cell = fract(vUv*pixelGrid);
+                float line = 1.0-smoothstep(0.08,0.19,min(min(cell.x,1.0-cell.x),min(cell.y,1.0-cell.y)));
+                float contour = smoothstep(0.018,0.16,edge);
+                c = c * contour * line * 2.4;
+            }
+        }
+        if(referenceStyle > 0.5)c *= referenceExposure;
         float a = max(c.r, max(c.g, c.b));
         gl_FragColor = vec4(c, a);
     }
@@ -1063,24 +1108,24 @@ multipleSplats(8);
 let lastUpdateTime = Date.now();
 let colorUpdateTimer = 0.0;
 createStudio();
-let fluidSettings=null;
+let fluidSettings=null, selectedFluidMode='fluidGas';
 applyMode=()=>{
- const pixels=selector.value==='pixels2021';
- if(pixels&&!fluidSettings){
-  fluidSettings={...config};
-  Object.assign(config,{SIM_RESOLUTION:128,DYE_RESOLUTION:256,
-   AUTO:true,PAUSED:false,TIME_SCALE:1,HUE:-1,HUE_RANGE:1,
-   CURL:30,VISCOSITY:0.2,DENSITY_DISSIPATION:0.6,SPLAT_RADIUS:0.12,
-   SHADING:false,BLOOM:false,SUNRAYS:false,GRAVITY:0});
- }else if(!pixels&&fluidSettings){
-  Object.assign(config,fluidSettings);fluidSettings=null;
- }else return;
- updateKeywords();initFramebuffers();
+ const next = selector.value;
+ if(next===selectedFluidMode || !isFluidMode())return;
+ const videoMode=videoModes.find(m=>m.id===next);
+ if(!fluidSettings)fluidSettings={...config};
+ Object.assign(config,fluidSettings);
+ if(videoMode)Object.assign(config,videoMode.settings,{AUTO:true,PAUSED:false,GRAVITY:0});
+ if(next==='pixels2021')Object.assign(config,{DYE_RESOLUTION:256,SHADING:false,BLOOM:false,SUNRAYS:false});
+ if(!ext.supportLinearFiltering){config.SHADING=false;config.BLOOM=false;config.SUNRAYS=false;}
+ selectedFluidMode=next;
+ if(next==='fluidGas')fluidSettings=null;
+ updateKeywords();initFramebuffers();syncStudio();
  for(const f of [dye.read,dye.write,velocity.read,velocity.write,pressure.read,pressure.write]){
   gl.bindFramebuffer(gl.FRAMEBUFFER,f.fbo);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);
  }
  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
- previousKick=0;lastBeat=0;lastInjection=0;multipleSplats(8);
+ previousKick=0;lastBeat=0;lastInjection=0;multipleSplats(videoMode?3:8);
 };
 ready = true;
 choose();
@@ -1260,11 +1305,15 @@ function drawDisplay (target) {
     let height = target == null ? gl.drawingBufferHeight : target.height;
 
     displayMaterial.bind();
-    const pixelated=selector.value==='pixels2021';
+    const style=videoModes.find(m=>m.id===selector.value)?.style||0;
+    const pixelated=selector.value==='pixels2021'||style===3;
     const aspect=canvas.width/Math.max(1,canvas.height);
-    gl.uniform2f(displayMaterial.uniforms.pixelGrid,pixelated?64*Math.max(1,aspect):0,pixelated?64/Math.min(1,aspect):0);
-    if (config.SHADING)
-        gl.uniform2f(displayMaterial.uniforms.texelSize, 1.0 / width, 1.0 / height);
+    const gridSize=style===3?config.GRID_SIZE:64;
+    gl.uniform2f(displayMaterial.uniforms.pixelGrid,pixelated?gridSize*Math.max(1,aspect):0,pixelated?gridSize/Math.min(1,aspect):0);
+    gl.uniform1f(displayMaterial.uniforms.referenceExposure,config.REFERENCE_EXPOSURE);
+    gl.uniform1f(displayMaterial.uniforms.referenceStyle,style);
+    gl.uniform1i(displayMaterial.uniforms.uVelocity,velocity.read.attach(4));
+    gl.uniform2f(displayMaterial.uniforms.texelSize, 1.0 / width, 1.0 / height);
     gl.uniform1i(displayMaterial.uniforms.uTexture, dye.read.attach(0));
     if (config.BLOOM) {
         gl.uniform1i(displayMaterial.uniforms.uBloom, bloom.attach(1));
@@ -1541,6 +1590,8 @@ function createStudio(){
  const controls=new Map(),settings=panel.querySelector('.fluid-settings'),out=panel.querySelector('#fluidStudioStatus');
  const specs=[
  ['DYE_RESOLUTION','Calidad',[[256,'Baja'],[384,'Móvil'],[512,'Media'],[640,'Alta'],[1024,'Súper alta']]],
+ ['REFERENCE_EXPOSURE','Brillo de referencia',.2,3,.05],['GRID_SIZE','Detalle de circuitos',40,160,1],
+ ['SPLAT_FORCE','Fuerza',500,10000,100],['VELOCITY_DISSIPATION','Freno del flujo',0,4,.05],
  ['TIME_SCALE','Tiempo',0,2,.05],['AUTO','Automático','check'],['SPLAT_RADIUS','Radio',.03,1,.01],
  ['SIM_RESOLUTION','Tamaño',[[64,'64'],[128,'128'],[256,'256']]],
  ['DENSITY_DISSIPATION','Disipación',0,4,.05],['VISCOSITY','Viscosidad',0,4,.05],['CURL','Vorticidad',0,60,1],['GRAVITY','Gravedad',-2,2,.05],
@@ -1552,6 +1603,7 @@ function createStudio(){
   if(!ext.supportLinearFiltering){config.SHADING=false;config.BLOOM=false;config.SUNRAYS=false;}
   updateKeywords();initFramebuffers();sync();
  }
+ syncStudio=()=>sync();
  function sync(){for(const [key,{input,value}] of controls){if(input.type==='checkbox')input.checked=!!config[key];else input.value=Number(config[key]);value.textContent=input.type==='range'?Number(config[key]).toFixed(2):'';}}
  for(const [key,title,min,max,step] of specs){
   const row=document.createElement('label'),text=document.createElement('span'),value=document.createElement('output');text.textContent=title;

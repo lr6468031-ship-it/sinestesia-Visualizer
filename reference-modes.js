@@ -40,6 +40,8 @@
     { value: 'lagrangian:turbulence', name: 'Turbulencia', desc: 'campo caótico', hue: 330 },
   ];
 
+  for(const mode of window.sinestesiaVideoFluidModes||[])cards.push({value:mode.id,name:mode.name.split(' · ')[0],desc:mode.name.split(' · ')[1]+' · video',hue:mode.hue});
+
   const grid = gallery.querySelector('#vmgGrid');
   for (const card of cards) {
     const button = document.createElement('button');
