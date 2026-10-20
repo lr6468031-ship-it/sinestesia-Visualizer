@@ -13,6 +13,10 @@
   const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) return;
   stage.append(canvas);
+  const haloCanvas = document.createElement('canvas');
+  const halo = haloCanvas.getContext('2d');
+  const cells = new Uint16Array(20 * 32);
+  let hotX = .5, hotY = .5, hotLight = 0;
   const settings = { light: 1, speed: 1, length: 1 };
   const panel = document.createElement('details');
   panel.className = 'spectrum-card'; panel.hidden = true;
@@ -30,7 +34,7 @@
   const sparks = Array.from({ length: 2400 }, () => ({
     x: 0, y: 0, vx: 0, vy: 0, age: 0, life: 0,
     history: new Float32Array(16),
-    depth: Math.random(), seed: Math.random() * Math.PI * 2, heat: Math.random()
+    depth: Math.random(), heat: Math.random()
   }));
   let frame = 0, active = false, last = 0, time = 0, pointer = null;
   let energy = 0, touchStrength = 0, magnetX = .5, magnetY = .5;
@@ -78,20 +82,25 @@
       const nx = dx/r, ny = dy/r;
       // Softened inward force and tangential drive maintain an open vortex.
       // Near the eye the pressure reverses, avoiding a singularity or pileup.
-      const pressure = .24 / (.22 + r) * Math.tanh((r-.12)*14);
+      const eye = .23 + Math.sin(time*.43)*.025;
+      const pressure = .28 / (.22 + r) * Math.tanh((r-eye)*12);
       const tangentSpeed = p.vx * ny - p.vy * nx;
       const swirl = (.42 + .1/(.3+r) - tangentSpeed) * .85;
-      const wave = Math.sin(p.x * 5 + time * .65) * Math.cos(p.y * 4 - time * .4);
-      let ax = nx*pressure + ny*swirl + wave*.055 - p.vx*.16;
-      let ay = ny*pressure - nx*swirl - wave*.055 - p.vy*.16;
+      // Curl of a shared smooth stream function: neighboring sparks bend
+      // together into moving folds instead of receiving unrelated noise.
+      const fx = p.x*5 + time*.65, fy = p.y*5 - time*.4;
+      const curlX = Math.sin(fx)*Math.cos(fy)*.12;
+      const curlY = -Math.cos(fx)*Math.sin(fy)*.12;
+      let ax = nx*pressure + ny*swirl + curlX - p.vx*.16;
+      let ay = ny*pressure - nx*swirl + curlY - p.vy*.16;
       if (touchStrength > .001) {
         const tx = mx-p.x, ty = my-p.y, d = Math.max(.005, Math.hypot(tx,ty));
         const ux = tx/d, uy = ty/d;
-        const falloff = touchStrength / (1 + d*d*5);
-        // Strong attraction at medium distances, a soft core, then orbit.
+        const falloff = touchStrength / (1 + d*d*14);
+        // Local attraction with a soft core and a stronger curling component.
         // Existing momentum bends into the magnet instead of snapping to it.
-        const pull = 2.6 * Math.tanh((d-.055)*22) * falloff;
-        const spin = (.75 - (p.vx*uy-p.vy*ux)) * falloff;
+        const pull = .95 * Math.tanh((d-.065)*18) * falloff;
+        const spin = (.85 - (p.vx*uy-p.vy*ux)) * falloff;
         ax += ux*pull + uy*spin; ay += uy*pull - ux*spin;
       }
       p.vx += ax*dt; p.vy += ay*dt;
@@ -125,6 +134,13 @@
     const light = settings.light * (.8 + gain * .2);
     ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    if (halo) {
+      const hw = Math.max(1,Math.round(w/4)), hh = Math.max(1,Math.round(h/4));
+      if (haloCanvas.width !== hw || haloCanvas.height !== hh) { haloCanvas.width = hw; haloCanvas.height = hh; }
+      halo.clearRect(0,0,hw,hh); halo.lineCap = 'round';
+      halo.strokeStyle = 'rgba(255,9,0,.12)'; halo.lineWidth = 1.8;
+    }
+    cells.fill(0);
     for (const p of sparks) {
       const white = p.heat > .87;
       const fade = Math.min(1,p.age*2,(p.life-p.age)*2);
@@ -138,11 +154,32 @@
         ctx.lineTo(x*unit,y*unit);
       }
       ctx.stroke();
+      if (halo) {
+        const tail = p.history.length-2;
+        halo.beginPath(); halo.moveTo(p.x*unit/4,p.y*unit/4);
+        halo.lineTo(p.history[tail]*unit/4,p.history[tail+1]*unit/4); halo.stroke();
+      }
+      const ix = Math.floor(p.x/domainX*20), iy = Math.floor(p.y/domainY*32);
+      if (ix >= 0 && ix < 20 && iy >= 0 && iy < 32) cells[iy*20+ix]++;
     }
-    // Local flare rather than a yellow glow over every particle.
-    const pulse = touchStrength*.65 + energy*.6;
+    if (halo) {
+      ctx.save(); ctx.globalAlpha = Math.min(1,light*.7);
+      ctx.filter = 'blur(5px)'; ctx.drawImage(haloCanvas,0,0,w,h); ctx.restore();
+    }
+    // The highlight follows an actual concentration of sparks, not the finger
+    // or a clock. It fades as that concentration disperses.
+    let peak = 0;
+    for (let i = 1; i < cells.length; i++) if (cells[i] > cells[peak]) peak = i;
+    const concentration = Math.max(0,Math.min(1,(cells[peak]-10)/28));
+    const blend = 1-Math.exp(-dt*6);
+    hotLight += (concentration-hotLight)*blend;
+    if (concentration > .05) {
+      hotX += (((peak%20+.5)/20)-hotX)*blend;
+      hotY += (((Math.floor(peak/20)+.5)/32)-hotY)*blend;
+    }
+    const pulse = hotLight * (.65 + energy*.35);
     if (pulse > .015) {
-      const x = magnetX*w, y = magnetY*h;
+      const x = hotX*w, y = hotY*h;
       const r = unit * (.025 + pulse * .1);
       const glow = ctx.createRadialGradient(x, y, 0, x, y, r);
       glow.addColorStop(0, `rgba(255,255,240,${Math.min(1, pulse * 1.3)})`);
