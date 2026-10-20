@@ -63,10 +63,41 @@ if (typeof document !== 'undefined') (() => {
     return;
   }
   const flow = new LagrangianFlow(), particles = Array.from({length:1400}, () => ({x:Math.random(),y:Math.random(),life:Math.random()*8}));
+  // The same 1,400 advected particles supply the body, halo and bright core.
+  const lightLayer = document.createElement('canvas'), light = lightLayer.getContext('2d');
+  const bloomLayer = document.createElement('canvas'), bloom = bloomLayer.getContext('2d');
+  const appearance = { hue: 0, range: 0.06, bloom: true, light: 1.4 };
+  const studio = document.createElement('details');
+  studio.id = 'vortexStudio'; studio.className = 'spectrum-card'; studio.hidden = true;
+  studio.innerHTML = `<summary>Ajustes del vórtice · brillo y color</summary>
+    <p class="spectrum-help">El brillo ilumina los mismos 1.400 trazos. Color y variación usan el mismo rango que Fluid; −1 activa multicolor.</p>
+    <div class="fluid-settings">
+      <label>Resplandor<input id="vortexBloom" type="checkbox" checked aria-label="Resplandor del vórtice"><output></output></label>
+      <label>Luz<input id="vortexLight" type="range" min="0" max="2" step="0.05" value="1.4" aria-label="Luz del vórtice"><output>1.40</output></label>
+      <label>Color · −1 multicolor<input id="vortexHue" type="range" min="-1" max="0.99" step="0.01" value="0" aria-label="Color del vórtice"><output>0.00</output></label>
+      <label>Variación de color<input id="vortexHueRange" type="range" min="0" max="1" step="0.01" value="0.06" aria-label="Variación de color del vórtice"><output>0.06</output></label>
+    </div>`;
+  base.parentElement.insertAdjacentElement('afterend', studio);
+  for (const [id, key] of [['vortexBloom','bloom'],['vortexLight','light'],['vortexHue','hue'],['vortexHueRange','range']]) {
+    const control = studio.querySelector('#' + id);
+    control.addEventListener('input', () => {
+      appearance[key] = control.type === 'checkbox' ? control.checked : Number(control.value);
+      control.nextElementSibling.textContent = control.type === 'checkbox' ? '' : Number(control.value).toFixed(2);
+      ctx.clearRect(0,0,surface.width,surface.height);
+    });
+  }
+  // Fluid uses normalized HSV hue plus a bounded hue variation, at full saturation.
+  function color(hue, saturation = 1) {
+    const h = ((hue % 1) + 1) % 1, i = Math.floor(h * 6), f = h * 6 - i;
+    const p = 1 - saturation, q = 1 - f * saturation, t = 1 - (1 - f) * saturation;
+    const rgb = [[1,t,p],[q,1,p],[p,1,t],[p,q,1],[t,p,1],[1,p,q]][i % 6];
+    return rgb.map(v => Math.round(v * 255)).join(',');
+  }
   let active = false, last = 0, time = 0, frame = 0, pointer = null;
   function choose() {
     active = window.sinestesiaAnalysisMode === 'separation' ? window.sinestesiaStemRouter.active('lagrangian:vortex') : selector.value.startsWith('lagrangian:');
     surface.style.display = active ? 'block' : 'none';
+    studio.hidden = !active || (window.sinestesiaAnalysisMode !== 'separation' && selector.value !== 'lagrangian:vortex');
     if (active) {
       base.style.visibility = 'hidden';
       const notice = document.getElementById('visualNotice');
@@ -91,23 +122,52 @@ if (typeof document !== 'undefined') (() => {
     const playing=typeof audio!=='undefined' && !audio.paused;
     const s=window.sinestesiaStemRouter?.signal('lagrangian:vortex') ?? (playing && typeof fastBeatSignal==='function' ? fastBeatSignal() : {bass:0,mid:0,treble:0,kick:0});
     const gain=Number(document.getElementById('fluidIntensity')?.value)||1.35;
-    const model=window.sinestesiaAnalysisMode === 'separation' ? 'vortex' : selector.value.split(':')[1], speed=(playing ? .35+Math.min(1,s.mid||0)*2 : .25)*gain;
+    const model=window.sinestesiaAnalysisMode === 'separation' ? 'vortex' : selector.value.split(':')[1];
+    const vortex = model === 'vortex';
+    // On the vortex, intensity changes light, not speed or particle count.
+    const speed=(playing ? .35+Math.min(1,s.mid||0)*2 : .25)*(vortex ? 1.35 : gain);
+    const luminosity = Math.max(0, appearance.light * gain / 1.35);
     flow.fill(flow.fields[0],time,model,s.kick||s.bass||0,s.mid||0);
     flow.fill(flow.fields[1],time+dt*speed,model,s.kick||s.bass||0,s.mid||0);
     time+=dt*speed;
-    ctx.globalCompositeOperation='source-over';ctx.fillStyle=`rgba(3,5,14,${1-Math.exp(-dt*4)})`;ctx.fillRect(0,0,w,h);
-    ctx.globalCompositeOperation='lighter';ctx.lineWidth=Math.max(.7,scale);
+    ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
+    ctx.fillStyle=vortex ? `rgba(0,0,0,${1-Math.exp(-dt*2.5)})` : `rgba(3,5,14,${1-Math.exp(-dt*4)})`;ctx.fillRect(0,0,w,h);
+    let pen = ctx;
+    if (vortex && light && bloom) {
+      if(lightLayer.width!==w || lightLayer.height!==h) {lightLayer.width=w;lightLayer.height=h;}
+      light.clearRect(0,0,w,h);pen=light;
+    }
+    pen.globalCompositeOperation='lighter';pen.lineWidth=Math.max(.7,scale);pen.lineCap='round';
     for(let band=0;band<4;band++) {
-      ctx.beginPath();ctx.strokeStyle=`hsla(${(time*12+band*48+(s.treble||0)*100)%360},90%,65%,.65)`;
+      pen.beginPath();
+      const hue = appearance.hue < 0 ? (time * .035 + band * .25) % 1 : (appearance.hue + band / 3 * appearance.range) % 1;
+      pen.strokeStyle=vortex ? `rgba(${color(hue)},${Math.min(1,.75*luminosity)})` : `hsla(${(time*12+band*48+(s.treble||0)*100)%360},90%,65%,.65)`;
       for(let i=band;i<particles.length;i+=4) {
         const p=particles[i], ox=p.x, oy=p.y;
         [p.x,p.y]=flow.step(ox,oy,dt*speed);
         if(pointer) { const dx=p.x-pointer.x,dy=p.y-pointer.y, f=Math.exp(-(dx*dx+dy*dy)*70)*dt*3; p.x-=dy*f;p.y+=dx*f; }
         p.life+=dt;
         if(p.x<0||p.x>1||p.y<0||p.y>1||p.life>10) {p.x=Math.random();p.y=Math.random();p.life=0;continue;}
-        ctx.moveTo(ox*w,oy*h);ctx.lineTo(p.x*w,p.y*h);
+        pen.moveTo(ox*w,oy*h);pen.lineTo(p.x*w,p.y*h);
       }
-      ctx.stroke();
+      if (vortex) {
+        // Reuse each path for its luminous body and cream-white core.
+        pen.lineWidth=2.5*scale;pen.stroke();
+        pen.lineWidth=.65*scale;
+        pen.strokeStyle=`rgba(${color(hue,.45)},${Math.min(1,.6*luminosity)})`;pen.stroke();
+      } else pen.stroke();
+    }
+    if (vortex && pen === light) {
+      ctx.globalCompositeOperation='lighter';
+      if (appearance.bloom && luminosity > 0) {
+        // One low-resolution bloom pass avoids per-particle shadow filters on phones.
+        const bw=Math.max(1,Math.round(w/3)), bh=Math.max(1,Math.round(h/3));
+        if(bloomLayer.width!==bw || bloomLayer.height!==bh) {bloomLayer.width=bw;bloomLayer.height=bh;}
+        bloom.clearRect(0,0,bw,bh);bloom.filter='blur(2px)';
+        bloom.drawImage(lightLayer,0,0,bw,bh);bloom.filter='none';
+        ctx.globalAlpha=Math.min(1,luminosity*.65);ctx.drawImage(bloomLayer,0,0,w,h);
+      }
+      ctx.globalAlpha=1;ctx.drawImage(lightLayer,0,0);
     }
     frame=requestAnimationFrame(draw);
   }
