@@ -11,6 +11,7 @@ on:
       - 'fluid-visualizer.js'
       - 'lagrangian-visualizer.js'
       - 'electric-iris.js'
+      - 'membrane-orb.js'
       - 'gamemaker-particles.js'
       - 'panorama.js'
       - 'visual-intensity.js'

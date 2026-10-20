@@ -19,6 +19,7 @@ on:
       - 'electric-iris.js'
       - 'particles-engine.js'
       - 'ember-vortex.js'
+      - 'membrane-orb.js'
       - 'gamemaker-particles.js'
       - 'panorama.js'
       - 'visual-intensity.js'
