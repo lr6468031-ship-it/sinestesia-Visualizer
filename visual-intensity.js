@@ -107,42 +107,10 @@
     return { bass, mid, treble, energy, kick };
   };
 
-  // The renderers have their own idle animation (Fluid AUTO, Iris halo/noise and Plasma shader time).
-  // A strict visual shutter guarantees the stage is black until at least one XY gate is valid.
-  const selector = document.getElementById('visualMode');
-  const base = document.getElementById('visualizer');
-  const stage = base?.parentElement;
-  let gateMask = null;
-  const gatedModes = new Set(['plasma', 'fluidGas', 'pixels2021', 'electricIris']);
-
-  if (stage) {
-    gateMask = document.createElement('div');
-    gateMask.id = 'xyGateBlackout';
-    gateMask.setAttribute('aria-hidden', 'true');
-    Object.assign(gateMask.style, {
-      position: 'absolute',
-      inset: '0',
-      background: '#000',
-      zIndex: '99',
-      pointerEvents: 'none',
-      display: 'none',
-    });
-    stage.appendChild(gateMask);
-  }
-
-  function syncGateMask() {
-    if (gateMask) {
-      const mode = selector?.value || '';
-      const applies = gatedModes.has(mode) && window.sinestesiaAnalysisMode !== 'separation';
-      const gates = applies ? gateState() : { kick: true, snare: true, melody: true, bypass: true };
-      const open = !!(gates.bypass || gates.kick || gates.snare || gates.melody);
-      gateMask.style.display = applies && !open ? 'block' : 'none';
-    }
-    requestAnimationFrame(syncGateMask);
-  }
+  // Gate audio reactions above, never the scene or its transport controls.
+  // Renderers keep their own idle animation and touch interaction visible.
 
   intensity.addEventListener('input', applyIntensityUI);
   intensity.addEventListener('change', applyIntensityUI);
   applyIntensityUI();
-  syncGateMask();
 })();

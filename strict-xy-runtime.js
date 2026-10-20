@@ -74,33 +74,14 @@
     return document.getElementById('visualMode')?.value || '';
   }
 
-  function setVisible(id, visible) {
-    const element = document.getElementById(id);
-    if (!element) return;
-    element.style.setProperty('visibility', visible ? 'visible' : 'hidden', 'important');
-    element.style.setProperty('opacity', visible ? '1' : '0', 'important');
-  }
-
   function enforceVisualGate() {
-    cleanupDeprecatedModes();
     const mode = selectedMode();
     const applies = GATED_MODES.has(mode) && window.sinestesiaAnalysisMode !== 'separation';
     const state = applies ? readGate() : { any:true, bypass:true };
-    const open = !applies || !!state.any || !!state.bypass;
     window.sinestesiaGateState = state;
-    window.sinestesiaStrictGateOpen = open;
-
-    const stage = document.getElementById('visualizer')?.parentElement;
-    if (stage) stage.style.background = '#000';
-
-    if (mode === 'plasma') {
-      setVisible('plasmaWebGLCanvas', open);
-      setVisible('visualizer', open && !window.sinestesiaPlasmaWebGLActive);
-    } else if (mode === 'fluidGas') {
-      setVisible('fluidGasCanvas', open);
-    } else if (mode === 'electricIris') {
-      setVisible('electricIrisCanvas', open);
-    }
+    window.sinestesiaStrictGateOpen = !applies || !!state.any || !!state.bypass;
+    // Detection controls musical pulses, not canvas visibility. Each renderer
+    // owns its visibility so switching scenes cannot leave a hidden canvas.
 
     requestAnimationFrame(enforceVisualGate);
   }
