@@ -8,7 +8,7 @@
   const stage = base.parentElement;
   const canvas = document.createElement('canvas');
   canvas.id = 'emberVortexCanvas';
-  canvas.setAttribute('aria-label', 'Flujo de filamentos neón con corrientes curvas y expansión radial');
+  canvas.setAttribute('aria-label', 'Flujo de filamentos neón con corrientes curvas y absorción radial');
   Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', display: 'none', background: '#000', zIndex: '9', touchAction: 'none' });
   const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) return;
@@ -21,7 +21,7 @@
   let radial = 0;
   const panel = document.createElement('details');
   panel.className = 'spectrum-card'; panel.hidden = true;
-  panel.innerHTML = '<summary>Flujo neón / Torbellino · ajustes</summary><p class="spectrum-help">Referencia: filamentos turquesa y azules, corrientes curvas y expansión radial luminosa. Mantén el dedo para atraer las chispas; arrastra para curvar la corriente. Al soltar conservan su impulso.</p><div class="fluid-settings"></div>';
+  panel.innerHTML = '<summary>Flujo neón / Torbellino · ajustes</summary><p class="spectrum-help">Referencia: filamentos turquesa y azules, corrientes curvas y absorción radial luminosa. Mantén el dedo para atraer las chispas; arrastra para curvar la corriente. Al soltar conservan su impulso.</p><div class="fluid-settings"></div>';
   const appearance = document.createElement('label');
   appearance.textContent = 'Estilo ';
   const palette = document.createElement('select');
@@ -81,8 +81,8 @@
       magnetX += (pointer.x - magnetX) * response;
       magnetY += (pointer.y - magnetY) * response;
     }
-    // Alternate loose curl with an outward jet; touch moves the focus continuously.
-    const jet = settings.reference ? Math.pow(.5 + .5 * Math.sin(time * .48 - 1.8), 3) : 0;
+    // Alternate loose curl with inward flow. Touch always controls an absorbing sink.
+    const jet = settings.reference ? (pointer ? 1 : Math.pow(.5 + .5 * Math.sin(time * .48 - 1.8), 3)) : 0;
     radial += (jet - radial) * (1 - Math.exp(-dt * 3));
     const cx = domainX * (.5 + Math.sin(time * .31) * .09);
     const cy = domainY * (.5 + Math.cos(time * .37) * .09);
@@ -110,18 +110,18 @@
         const rx = p.x - focusX, ry = p.y - focusY;
         const distance = Math.max(.025, Math.hypot(rx, ry));
         const jetSpeed = .4 + distance * 1.5;
-        ax = ax * (1-radial) + (rx/distance*jetSpeed-p.vx)*radial*3;
-        ay = ay * (1-radial) + (ry/distance*jetSpeed-p.vy)*radial*3;
+        ax = ax * (1-radial) + (-rx/distance*jetSpeed-p.vx)*radial*3;
+        ay = ay * (1-radial) + (-ry/distance*jetSpeed-p.vy)*radial*3;
       }
       if (touchStrength > .001) {
         const tx = mx-p.x, ty = my-p.y, d = Math.max(.005, Math.hypot(tx,ty));
         const ux = tx/d, uy = ty/d;
-        const falloff = touchStrength / (1 + d*d*14);
-        // Local attraction with a soft core and a stronger curling component.
-        // Existing momentum bends into the magnet instead of snapping to it.
-        const pull = .95 * Math.tanh((d-.065)*18) * falloff;
-        const spin = (.85 - (p.vx*uy-p.vy*ux)) * falloff;
-        ax += ux*pull + uy*spin; ay += uy*pull - ux*spin;
+        // Override the background field while held: damp outward momentum and
+        // keep a small tangential component without repelling at the core.
+        const weight = pointer ? 1 : touchStrength;
+        const inward = Math.min(1.7, .35 + d*1.4);
+        ax = ax*(1-weight) + ((ux*inward + uy*.12)-p.vx)*weight*9;
+        ay = ay*(1-weight) + ((uy*inward - ux*.12)-p.vy)*weight*9;
       }
       p.vx += ax*dt; p.vy += ay*dt;
       const speed = Math.hypot(p.vx,p.vy), limit = 1.9 + energy*.35;
@@ -129,12 +129,23 @@
       p.history.copyWithin(2,0,p.history.length-2);
       p.history[0] = p.x; p.history[1] = p.y;
       p.x += p.vx*dt; p.y += p.vy*dt; p.age += dt;
-      if (p.age > p.life || p.x < -.4 || p.x > domainX+.4 || p.y < -.4 || p.y > domainY+.4) {
+      const sinkX = pointer ? mx : focusX, sinkY = pointer ? my : focusY;
+      const absorbed = (pointer || (settings.reference && radial > .4)) &&
+        Math.hypot(p.x-sinkX, p.y-sinkY) < .045;
+      if (absorbed || p.age > p.life || p.x < -.4 || p.x > domainX+.4 || p.y < -.4 || p.y > domainY+.4) {
         seed(p);
-        if (settings.reference && radial > .4) {
-          const angle = Math.random()*Math.PI*2, radius = .015 + Math.random()*.13;
-          p.x = focusX + Math.cos(angle)*radius; p.y = focusY + Math.sin(angle)*radius;
-          p.vx = Math.cos(angle)*.35; p.vy = Math.sin(angle)*.35;
+        if (pointer || (settings.reference && radial > .4)) {
+          // Replenish at the outer viewport, never at the absorbing point.
+          const edge = Math.floor(Math.random()*4), u = Math.random();
+          p.x = edge < 2 ? (edge === 0 ? 0 : domainX) : u*domainX;
+          p.y = edge < 2 ? u*domainY : (edge === 2 ? 0 : domainY);
+          if (Math.hypot(p.x-sinkX,p.y-sinkY) < .3) {
+            p.x = sinkX < domainX/2 ? domainX : 0;
+            p.y = sinkY < domainY/2 ? domainY : 0;
+          }
+          const d = Math.max(.01, Math.hypot(sinkX-p.x,sinkY-p.y));
+          p.vx = (sinkX-p.x)/d*.35; p.vy = (sinkY-p.y)/d*.35;
+          // Reset history so recycling never draws a line out of the sink.
           for (let j=0;j<p.history.length;j+=2) { p.history[j]=p.x;p.history[j+1]=p.y; }
         }
       }
@@ -237,7 +248,7 @@
     if (active) {
       base.style.visibility = 'hidden';
       const notice = document.getElementById('visualNotice');
-      if (notice) notice.textContent = 'Flujo neón · corrientes curvas, estelas azules y turquesa, expansión radial y foco luminoso. Arrastra para dirigir el flujo.';
+      if (notice) notice.textContent = 'Flujo neón · corrientes curvas, estelas azules y turquesa, absorción radial y foco luminoso. Arrastra para dirigir el flujo.';
       if (!document.hidden) frame = requestAnimationFrame(draw);
     }
     document.querySelectorAll('#vmgGrid .vmg-card').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === select.value)));
