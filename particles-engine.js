@@ -16,13 +16,13 @@
   if (!selector.querySelector(`option[value="${MODE}"]`)) {
     const option = document.createElement('option');
     option.value = MODE;
-    option.textContent = 'Particles · Motor APK';
+    option.textContent = 'Partículas · Vórtice de fuego';
     selector.append(option);
   }
 
   const canvas = document.createElement('canvas');
   canvas.id = 'particlesEngineCanvas';
-  canvas.setAttribute('aria-label', 'Motor de partículas recreado desde la referencia APK');
+  canvas.setAttribute('aria-label', 'Remolino de chispas rojas y doradas con estelas luminosas');
   Object.assign(canvas.style, {
     position: 'absolute', inset: '0', width: '100%', height: '100%', display: 'none',
     background: '#000', zIndex: '8', touchAction: 'none', pointerEvents: 'auto'
@@ -32,19 +32,20 @@
   if (!ctx) return;
 
   const params = {
-    attractor: 1.10,
-    circularForce: 1.35,
-    turbulence: 1.25,
-    airResistance: 0.62,
-    speed: 1.00,
-    lifetime: 9.0,
+    attractor: 1.15,
+    circularForce: 2.25,
+    turbulence: 0.45,
+    airResistance: 0.48,
+    speed: 1.20,
+    lifetime: 11.0,
     autopilot: true,
     gyroscope: false,
     glow: 1.0,
-    trail: 0.19,
+    trail: 0.23,
   };
 
   const presets = {
+    embers: { label: 'Vórtice de fuego', values: { attractor: 1.15, circularForce: 2.25, turbulence: .45, airResistance: .48, speed: 1.20, lifetime: 11, glow: 1, trail: .23 } },
     field: { label: 'Campo APK', values: { attractor: 1.10, circularForce: 1.35, turbulence: 1.25, airResistance: 0.62, speed: 1.00, lifetime: 9.0, glow: 1.0, trail: 0.19 } },
     vortex: { label: 'Vórtice', values: { attractor: 0.78, circularForce: 2.25, turbulence: 0.82, airResistance: 0.48, speed: 1.18, lifetime: 11.0, glow: 1.15, trail: 0.14 } },
     reactor: { label: 'Reactor', values: { attractor: 2.10, circularForce: 1.05, turbulence: 2.35, airResistance: 0.36, speed: 1.55, lifetime: 5.8, glow: 1.45, trail: 0.12 } },
@@ -55,8 +56,8 @@
   panel.id = 'particlesEngineStudio';
   panel.hidden = true;
   panel.innerHTML = `
-    <summary>Particles · motor recreado del APK</summary>
-    <p class="pe-help">Motor independiente de partículas con las fuerzas observadas en la app Unity: Attractor, fuerza circular, turbulencia, resistencia del aire, velocidad, lifetime, autopilot y giroscopio. Está reimplementado para Web/Canvas; no es el binario Unity pegado dentro de la web.</p>
+    <summary>Partículas · Vórtice de fuego</summary>
+    <p class="pe-help">Chispas rojas, estelas doradas y destellos de luz que giran con la música. Toca y arrastra para guiar el remolino.</p>
     <div class="pe-presets" role="group" aria-label="Preajustes del motor de partículas"></div>
     <div class="pe-controls"></div>
     <div class="pe-actions"><button type="button" data-action="burst">Explosión</button><button type="button" data-action="reset">Reiniciar campo</button></div>
@@ -68,7 +69,7 @@
   style.textContent = `
     #particlesEngineStudio{margin:14px 0 18px;padding:16px;border:1px solid #34303e;border-radius:18px;background:#08090d;color:#eee}
     #particlesEngineStudio[hidden]{display:none}#particlesEngineStudio summary{cursor:pointer;font-size:17px;padding:4px 0 10px}
-    .pe-help{font-size:11px;line-height:1.45;color:#9c97aa}.pe-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0 16px}
+    .pe-help{font-size:11px;line-height:1.45;color:#9c97aa}.pe-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin:12px 0 16px}
     .pe-preset{border:1px solid #3b3546;background:linear-gradient(145deg,#17121e,#090a0f);color:#e9e3f2;border-radius:12px;padding:10px 6px;font-size:11px}
     .pe-preset[aria-pressed=true]{border-color:#d89cff;box-shadow:0 0 14px rgba(194,107,255,.22)}
     .pe-controls{display:grid;gap:11px}.pe-control{display:grid;grid-template-columns:minmax(105px,1fr) minmax(110px,1.3fr) 46px;align-items:center;gap:8px;font-size:12px}
@@ -134,7 +135,7 @@
     }
   }
 
-  let activePreset = 'field';
+  let activePreset = 'embers';
   function applyPreset(id) {
     const preset = presets[id]; if (!preset) return;
     Object.assign(params, preset.values); activePreset = id; syncControls();
@@ -151,7 +152,7 @@
   const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const mobile = /Mobi|Android/i.test(navigator.userAgent);
-  const count = mobile ? 900 : 1500;
+  const count = mobile ? 1700 : 2500;
   const particles = Array.from({ length: count }, () => ({}));
   let pointer = null;
   let gyroX = 0, gyroY = 0;
@@ -167,6 +168,14 @@
     p.vx = -Math.sin(a) * tangent + (Math.random() - .5) * .002;
     p.vy = Math.cos(a) * tangent + (Math.random() - .5) * .002;
     p.px = p.x; p.py = p.y; p.age = Math.random() * params.lifetime; p.life = params.lifetime * (.72 + Math.random() * .55);
+    if (activePreset === 'embers') {
+      const unit = Math.max(1, Math.min(canvas.width, canvas.height));
+      const radius = burst ? .09 + Math.random() * .06 : .12 + Math.sqrt(Math.random()) * Math.hypot(canvas.width, canvas.height) / unit * .58;
+      p.x = .5 + Math.cos(a) * radius * unit / Math.max(1, canvas.width);
+      p.y = .5 + Math.sin(a) * radius * unit / Math.max(1, canvas.height);
+      p.vx = 0; p.vy = 0; p.px = p.x; p.py = p.y;
+      p.heat = Math.random();
+    }
     p.hue = randHue(); p.size = .45 + Math.random() * 1.35; p.seed = Math.random() * 1000;
   }
   function resetAll() { particles.forEach(p => resetParticle(p)); clearCanvas(); }
@@ -193,13 +202,14 @@
     smoothBass = lerp(smoothBass, bass, k); smoothMid = lerp(smoothMid, mid, k); smoothTreble = lerp(smoothTreble, treble, k);
     if (bass > .38 && bass > lastKick + .06) burst(.42 + bass * .7);
     lastKick = lerp(lastKick, bass, 1 - Math.exp(-dt * 14));
-    flash *= Math.exp(-dt * 5.2);
+    flash *= Math.exp(-dt * 3.8);
     return { bass: smoothBass, mid: smoothMid, treble: smoothTreble, playing };
   }
 
   function burst(amount = 1) {
     flash = Math.max(flash, Math.min(1.4, amount));
     const cx = pointer?.x ?? .5, cy = pointer?.y ?? .5;
+    if (activePreset === 'embers') return;
     const impulse = .008 + amount * .013;
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
@@ -212,13 +222,82 @@
   function targetPoint() {
     if (pointer) return pointer;
     if (!params.autopilot) return { x: .5, y: .5 };
+    if (activePreset === 'embers') return {
+      x: .5 + Math.sin(time * .61) * .14,
+      y: .5 + Math.sin(time * .79) * .17,
+    };
     return {
       x: .5 + Math.cos(time * .67) * .19 + Math.sin(time * .21) * .055,
       y: .5 + Math.sin(time * .81) * .16 + Math.cos(time * .29) * .05,
     };
   }
 
+  // Circular flow in isotropic coordinates keeps the vortex round on phones.
+  // A hollow core and a common rotation direction preserve the reference's eye.
+  function simulateEmbers(dt, s, w, h) {
+    const target = targetPoint(), unit = Math.min(w, h);
+    const step = dt * params.speed;
+    const follow = 1 - Math.exp(-dt * (5 + params.airResistance * 12));
+    const pulse = flash + s.bass * .65;
+    const fade = 1 - Math.pow(1 - clamp(params.trail, .03, .38), dt * 60);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(0,0,0,${fade})`; ctx.fillRect(0, 0, w, h);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const dx = (p.x - target.x) * w / unit, dy = (p.y - target.y) * h / unit;
+      const radius = Math.hypot(dx, dy), r = Math.max(.025, radius);
+      const nx = dx / r, ny = dy / r;
+      const eye = .105 + Math.sin(time * .9) * .018;
+      const spiral = -.035 * params.attractor + Math.sin(p.seed + time * 1.4 + r * 17) * .018 * params.turbulence;
+      const radial = radius < eye ? (eye - radius) * 3 : spiral;
+      const orbit = (.18 + .22 * Math.sqrt(r)) * params.circularForce * (1 + pulse * .28 + s.mid * .18);
+      p.vx = lerp(p.vx, -ny * orbit + nx * radial, follow);
+      p.vy = lerp(p.vy, nx * orbit + ny * radial, follow);
+      const gx = params.gyroscope ? gyroX * .06 : 0;
+      const gy = params.gyroscope ? gyroY * .06 : 0;
+      p.px = p.x; p.py = p.y;
+      p.x += (p.vx + gx) * step * unit / w;
+      p.y += (p.vy + gy) * step * unit / h;
+      p.age += dt;
+      if (p.age > p.life || p.x < -.35 || p.x > 1.35 || p.y < -.35 || p.y > 1.35) {
+        resetParticle(p); p.age = 0; continue;
+      }
+      const life = clamp(p.age * 3) * clamp((p.life - p.age) * 2);
+      const gold = p.heat > .83;
+      const flicker = .78 + .22 * Math.sin(time * (7 + p.heat * 5) + p.seed);
+      const opacity = Math.min(.94, (gold ? .72 : .48) * life * flicker * params.glow);
+      const length = (gold ? .014 : .021) * (.6 + p.size * .5) * (1 + pulse * .3);
+      const v = Math.max(.001, Math.hypot(p.vx, p.vy));
+      const x = p.x * w, y = p.y * h;
+      const tx = x - p.vx / v * length * unit, ty = y - p.vy / v * length * unit;
+      ctx.lineWidth = Math.max(.55, unit / 650) * (gold ? .75 : 1.25) * p.size;
+      // Wide red underglow, then a thin hot filament; no per-spark shadow blur.
+      if (i % 3 === 0) {
+        ctx.strokeStyle = `rgba(255,8,0,${opacity * .11})`;
+        const width = ctx.lineWidth; ctx.lineWidth = width * 5;
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y); ctx.stroke(); ctx.lineWidth = width;
+      }
+      ctx.strokeStyle = gold ? `rgba(255,224,142,${opacity})` : `rgba(255,${12 + Math.round(p.heat * 25)},3,${opacity})`;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y); ctx.stroke();
+    }
+    // A bright knot travels around the dark eye, like the flare in the video.
+    const angle = time * 1.65;
+    const flare = .22 + .78 * Math.pow(Math.max(0, Math.sin(time * 1.35 - 1)), 7) + pulse * .5;
+    const cx = target.x * w + Math.cos(angle) * unit * .13;
+    const cy = target.y * h + Math.sin(angle) * unit * .13;
+    const radius = unit * (.065 + flare * .09);
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    glow.addColorStop(0, `rgba(255,255,220,${Math.min(.95, flare)})`);
+    glow.addColorStop(.12, `rgba(255,231,95,${flare * .7})`);
+    glow.addColorStop(.38, `rgba(255,51,0,${flare * .22})`);
+    glow.addColorStop(1, 'rgba(130,0,0,0)');
+    ctx.fillStyle = glow; ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+    ctx.restore();
+  }
+
   function simulate(dt, s, w, h) {
+    if (activePreset === 'embers') { simulateEmbers(dt, s, w, h); return; }
     const target = targetPoint();
     const aspect = w / Math.max(1, h);
     const drag = Math.exp(-params.airResistance * dt * 5.4);
@@ -306,7 +385,7 @@
   function addGalleryCard() {
     const grid = document.getElementById('vmgGrid'); if (!grid || grid.querySelector(`[data-mode="${MODE}"]`)) return;
     const button = document.createElement('button'); button.type = 'button'; button.className = 'vmg-card'; button.dataset.mode = MODE;
-    button.style.setProperty('--h', '292'); button.innerHTML = '<strong>Particles APK</strong><small>motor de fuerzas recreado</small>';
+    button.style.setProperty('--h', '8'); button.innerHTML = '<strong>Vórtice de fuego</strong><small>chispas rojas y estelas doradas</small>';
     button.addEventListener('click', () => { selector.value = MODE; selector.dispatchEvent(new Event('change', { bubbles: true })); stage.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
     grid.append(button);
   }
@@ -315,9 +394,9 @@
     active = window.sinestesiaAnalysisMode !== 'separation' && selector.value === MODE;
     canvas.style.display = active ? 'block' : 'none'; panel.hidden = !active;
     if (active) {
-      base.style.visibility = 'hidden'; last = 0; resize(); clearCanvas();
+      base.style.visibility = 'hidden'; last = 0; resize(); resetAll();
       const notice = document.getElementById('visualNotice');
-      if (notice) notice.textContent = 'Particles · motor APK recreado: atracción + fuerza circular + turbulencia + audio + tacto.';
+      if (notice) notice.textContent = 'Partículas · Vórtice de fuego. Arrastra para mover el remolino; la música enciende las chispas.';
       if (!frame) frame = requestAnimationFrame(draw);
     } else if (frame) { cancelAnimationFrame(frame); frame = 0; }
     document.querySelectorAll('#vmgGrid .vmg-card').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === selector.value)));
@@ -325,7 +404,7 @@
 
   selector.addEventListener('change', choose);
   document.addEventListener('visibilitychange', () => { last = 0; if (active && !document.hidden && !frame) frame = requestAnimationFrame(draw); });
-  addGalleryCard(); resetAll(); choose();
+  addGalleryCard(); resize(); resetAll(); choose();
 
   window.sinestesiaParticlesEngine = {
     select() { selector.value = MODE; selector.dispatchEvent(new Event('change', { bubbles: true })); },
