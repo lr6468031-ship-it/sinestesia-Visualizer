@@ -18,6 +18,7 @@ on:
       - 'lagrangian-visualizer.js'
       - 'electric-iris.js'
       - 'particles-engine.js'
+      - 'ember-vortex.js'
       - 'gamemaker-particles.js'
       - 'panorama.js'
       - 'visual-intensity.js'
