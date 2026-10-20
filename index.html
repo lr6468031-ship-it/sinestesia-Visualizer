@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#000000" />
   <title>Sinestesia Visualizer</title>
   <link rel="stylesheet" href="styles.css?v=20261017-fluidgas1" />
-  <link rel="stylesheet" href="controls.css?v=20261018-panorama1" />
+  <link rel="stylesheet" href="controls.css?v=20261020-music-analyzers1" />
 <style>#spectrumEditor[hidden],#separationEditor[hidden]{display:none!important} #separateResults{display:flex;flex-direction:column;gap:12px} #separateResults .stem-row{display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box}</style>
 </head>
 <body>
@@ -23,7 +23,6 @@
         <label>Velocidad <input id="playbackSpeed" type="range" min="0.5" max="1.25" step="0.05" value="1" /><output id="playbackSpeedValue">1.00×</output></label>
         <small id="bpmValue">BPM aprox. · esperando golpes regulares</small>
         <small id="visualNotice" role="status"></small>
-        <label>Modo de detección <select id="audioAnalysisMode"><option value="spectrum">1 · Frecuencias / espectrograma</option><option value="separation">2 · Separación de música / pistas</option></select></label>
       </div>
     </header>
 
@@ -71,8 +70,16 @@
         </section>
       </div>
 
+      <section class="music-analyzers" aria-labelledby="musicAnalyzersTitle">
+        <div class="analyzer-options">
+          <h2 id="musicAnalyzersTitle">Analizadores de música</h2>
+          <p>Elige cómo analizar la canción para generar las señales que activan los visuales.</p>
+          <label for="audioAnalysisMode">Analizador de música</label>
+          <select id="audioAnalysisMode" aria-describedby="analyzerHelp"><option value="spectrum">Frecuencias / espectrograma</option><option value="separation">Separación de música / pistas</option></select>
+          <p id="analyzerHelp">El estilo, la intensidad y el movimiento se ajustan en las opciones visuales.</p>
+        </div>
       <section id="spectrumEditor" class="spectrum-card" aria-label="Ajustar detección por frecuencia">
-        <h2 class="spectrum-title">Modo 1 · Frecuencias / espectrograma</h2>
+        <h2 class="spectrum-title">Frecuencias / espectrograma</h2>
         <button id="spectrumToggle" class="spectrum-toggle" type="button" aria-expanded="true" aria-controls="spectrumPanel">Ocultar espectrograma</button>
         <div id="spectrumPanel">
           <p class="spectrum-help">X = frecuencia. Y = nivel en dBFS: arriba es más fuerte. Arrastra K, S o M en ambos ejes. Solo se aceptan ataques cuyo pico en la banda elegida esté dentro del rectángulo, entre sus límites mínimo y máximo; fuera se rechazan.</p>
@@ -103,7 +110,7 @@
       </section>
 
       <section id="separationEditor" hidden class="spectrum-card separator-card" aria-label="Separación de instrumentos con inteligencia artificial">
-        <h2 class="spectrum-title">Modo 2 · Separación de música / pistas</h2>
+        <h2 class="spectrum-title">Separación de música / pistas</h2>
         <p class="spectrum-help">Primero procesa la canción con IA. Después aparecerá una mesa multipista con cada sección separada y su forma de onda. Tú eliges manualmente qué visual corresponde a cada pista. La canción se procesa en tu dispositivo; no se sube.</p>
         <div class="separation-options">
           <label>Motor IA <select id="separateEngine"><option value="auto">Automático · GPU o CPU</option><option value="cpu">CPU compatible · sin WebGPU</option></select></label>
@@ -119,6 +126,8 @@
           <div id="separateResults" aria-label="Pistas separadas"></div>
         </section>
         <p class="spectrum-help">La IA separa batería, bajo, voz y otros/melodía; además se generan bandas estimadas para kick, snare y platillos. Esas estimaciones no equivalen a stems perfectos, pero sirven para asignar reacciones visuales más específicas.</p>
+      </section>
+
       </section>
 
       <div class="meter-card" aria-label="Niveles de frecuencia">
