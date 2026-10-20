@@ -8,7 +8,7 @@
   const stage = base.parentElement;
   const canvas = document.createElement('canvas');
   canvas.id = 'emberVortexCanvas';
-  canvas.setAttribute('aria-label', 'Torbellino rojo de filamentos finos y chispas blancas');
+  canvas.setAttribute('aria-label', 'Flujo de filamentos neón con corrientes curvas y expansión radial');
   Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', display: 'none', background: '#000', zIndex: '9', touchAction: 'none' });
   const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) return;
@@ -17,10 +17,18 @@
   const halo = haloCanvas.getContext('2d');
   const cells = new Uint16Array(20 * 32);
   let hotX = .5, hotY = .5, hotLight = 0;
-  const settings = { light: 1, speed: 1, length: 1 };
+  const settings = { light: 1, speed: 1, length: 1, reference: true };
+  let radial = 0;
   const panel = document.createElement('details');
   panel.className = 'spectrum-card'; panel.hidden = true;
-  panel.innerHTML = '<summary>Torbellino rojo · ajustes</summary><p class="spectrum-help">Filamentos finos sobre negro, giro continuo y destellos blancos. Mantén el dedo para atraer las chispas; arrastra para curvar la corriente. Al soltar conservan su impulso.</p><div class="fluid-settings"></div>';
+  panel.innerHTML = '<summary>Flujo neón / Torbellino · ajustes</summary><p class="spectrum-help">Referencia: filamentos turquesa y azules, corrientes curvas y expansión radial luminosa. Mantén el dedo para atraer las chispas; arrastra para curvar la corriente. Al soltar conservan su impulso.</p><div class="fluid-settings"></div>';
+  const appearance = document.createElement('label');
+  appearance.textContent = 'Estilo ';
+  const palette = document.createElement('select');
+  palette.setAttribute('aria-label', 'Estilo del torbellino');
+  palette.innerHTML = '<option value="reference">Flujo neón · referencia del video</option><option value="ember">Torbellino rojo · original</option>';
+  palette.addEventListener('change', () => { settings.reference = palette.value === 'reference'; });
+  appearance.append(palette); panel.querySelector('.fluid-settings').append(appearance);
   for (const [key, name, min, max] of [['light','Luz',.3,1.8], ['speed','Giro',.3,2], ['length','Estela',.4,1.8]]) {
     const row = document.createElement('label'); row.append(document.createTextNode(name));
     const input = document.createElement('input'); input.type = 'range'; input.min = min; input.max = max; input.step = .05; input.value = 1; input.setAttribute('aria-label', name + ' del torbellino rojo');
@@ -33,7 +41,7 @@
   // a local force; it never translates the particle cloud or its history.
   const sparks = Array.from({ length: 2400 }, () => ({
     x: 0, y: 0, vx: 0, vy: 0, age: 0, life: 0,
-    history: new Float32Array(16),
+    history: new Float32Array(48),
     depth: Math.random(), heat: Math.random()
   }));
   let frame = 0, active = false, last = 0, time = 0, pointer = null;
@@ -73,8 +81,13 @@
       magnetX += (pointer.x - magnetX) * response;
       magnetY += (pointer.y - magnetY) * response;
     }
+    // Alternate loose curl with an outward jet; touch moves the focus continuously.
+    const jet = settings.reference ? Math.pow(.5 + .5 * Math.sin(time * .48 - 1.8), 3) : 0;
+    radial += (jet - radial) * (1 - Math.exp(-dt * 3));
     const cx = domainX * (.5 + Math.sin(time * .31) * .09);
     const cy = domainY * (.5 + Math.cos(time * .37) * .09);
+    const focusX = cx + (magnetX * domainX - cx) * touchStrength;
+    const focusY = cy + (magnetY * domainY - cy) * touchStrength;
     const mx = magnetX * domainX, my = magnetY * domainY;
     for (const p of sparks) {
       const dx = cx - p.x, dy = cy - p.y;
@@ -93,6 +106,13 @@
       const curlY = -Math.cos(fx)*Math.sin(fy)*.12;
       let ax = nx*pressure + ny*swirl + curlX - p.vx*.16;
       let ay = ny*pressure - nx*swirl + curlY - p.vy*.16;
+      if (settings.reference) {
+        const rx = p.x - focusX, ry = p.y - focusY;
+        const distance = Math.max(.025, Math.hypot(rx, ry));
+        const jetSpeed = .4 + distance * 1.5;
+        ax = ax * (1-radial) + (rx/distance*jetSpeed-p.vx)*radial*3;
+        ay = ay * (1-radial) + (ry/distance*jetSpeed-p.vy)*radial*3;
+      }
       if (touchStrength > .001) {
         const tx = mx-p.x, ty = my-p.y, d = Math.max(.005, Math.hypot(tx,ty));
         const ux = tx/d, uy = ty/d;
@@ -109,7 +129,15 @@
       p.history.copyWithin(2,0,p.history.length-2);
       p.history[0] = p.x; p.history[1] = p.y;
       p.x += p.vx*dt; p.y += p.vy*dt; p.age += dt;
-      if (p.age > p.life || p.x < -.4 || p.x > domainX+.4 || p.y < -.4 || p.y > domainY+.4) seed(p);
+      if (p.age > p.life || p.x < -.4 || p.x > domainX+.4 || p.y < -.4 || p.y > domainY+.4) {
+        seed(p);
+        if (settings.reference && radial > .4) {
+          const angle = Math.random()*Math.PI*2, radius = .015 + Math.random()*.13;
+          p.x = focusX + Math.cos(angle)*radius; p.y = focusY + Math.sin(angle)*radius;
+          p.vx = Math.cos(angle)*.35; p.vy = Math.sin(angle)*.35;
+          for (let j=0;j<p.history.length;j+=2) { p.history[j]=p.x;p.history[j+1]=p.y; }
+        }
+      }
     }
   }
   function draw(now) {
@@ -138,7 +166,7 @@
       const hw = Math.max(1,Math.round(w/4)), hh = Math.max(1,Math.round(h/4));
       if (haloCanvas.width !== hw || haloCanvas.height !== hh) { haloCanvas.width = hw; haloCanvas.height = hh; }
       halo.clearRect(0,0,hw,hh); halo.lineCap = 'round';
-      halo.strokeStyle = 'rgba(255,9,0,.12)'; halo.lineWidth = 1.8;
+      halo.strokeStyle = settings.reference ? 'rgba(0,180,255,.2)' : 'rgba(255,9,0,.12)'; halo.lineWidth = 1.8;
     }
     cells.fill(0);
     for (const p of sparks) {
@@ -146,6 +174,7 @@
       const fade = Math.min(1,p.age*2,(p.life-p.age)*2);
       const opacity = (.3 + p.depth * .45) * light * fade;
       ctx.strokeStyle = white ? `rgba(255,240,193,${Math.min(.85, opacity)})` : `rgba(255,${Math.round(5 + p.heat * 16)},2,${Math.min(.8, opacity)})`;
+      if (settings.reference) ctx.strokeStyle = `hsla(${p.heat > .5 ? 170 + p.heat*20 : 215 + p.heat*40},100%,${white ? 85 : 52}%,${Math.min(.9,opacity)})`;
       ctx.lineWidth = Math.max(.4, unit / 850) * (.45 + p.depth * .7);
       ctx.beginPath(); ctx.moveTo(p.x*unit,p.y*unit);
       for (let j = 0; j < p.history.length; j += 2) {
@@ -177,15 +206,25 @@
       hotX += (((peak%20+.5)/20)-hotX)*blend;
       hotY += (((Math.floor(peak/20)+.5)/32)-hotY)*blend;
     }
-    const pulse = hotLight * (.65 + energy*.35);
+    const pulse = Math.max(hotLight, settings.reference ? radial*.65 : 0) * (.65 + energy*.35);
     if (pulse > .015) {
-      const x = hotX*w, y = hotY*h;
+      const jetX = (.5 + Math.sin(time*.31)*.09)*(1-touchStrength) + magnetX*touchStrength;
+      const jetY = (.5 + Math.cos(time*.37)*.09)*(1-touchStrength) + magnetY*touchStrength;
+      const x = (settings.reference ? hotX*(1-radial)+jetX*radial : hotX)*w;
+      const y = (settings.reference ? hotY*(1-radial)+jetY*radial : hotY)*h;
       const r = unit * (.025 + pulse * .1);
       const glow = ctx.createRadialGradient(x, y, 0, x, y, r);
+      if (settings.reference) {
+        glow.addColorStop(0, `rgba(190,255,255,${pulse})`);
+        glow.addColorStop(.18, `rgba(0,255,220,${pulse*.8})`);
+        glow.addColorStop(.5, `rgba(0,100,255,${pulse*.2})`);
+        glow.addColorStop(1, 'rgba(0,80,255,0)');
+      } else {
       glow.addColorStop(0, `rgba(255,255,240,${Math.min(1, pulse * 1.3)})`);
       glow.addColorStop(.15, `rgba(255,222,128,${pulse * .65})`);
       glow.addColorStop(.45, `rgba(255,35,0,${pulse * .28})`);
       glow.addColorStop(1, 'rgba(255,0,0,0)');
+      }
       ctx.fillStyle = glow; ctx.fillRect(x-r, y-r, r*2, r*2);
     }
     frame = requestAnimationFrame(draw);
@@ -198,7 +237,7 @@
     if (active) {
       base.style.visibility = 'hidden';
       const notice = document.getElementById('visualNotice');
-      if (notice) notice.textContent = 'Torbellino rojo · mantén el dedo para atraer las chispas, arrastra para curvarlas y suelta para dejarlas fluir.';
+      if (notice) notice.textContent = 'Flujo neón · corrientes curvas, estelas azules y turquesa, expansión radial y foco luminoso. Arrastra para dirigir el flujo.';
       if (!document.hidden) frame = requestAnimationFrame(draw);
     }
     document.querySelectorAll('#vmgGrid .vmg-card').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === select.value)));
@@ -222,7 +261,7 @@
   const grid = document.getElementById('vmgGrid');
   if (grid) {
     const card = document.createElement('button'); card.type = 'button'; card.className = 'vmg-card'; card.dataset.mode = mode;
-    card.style.setProperty('--h', '2'); card.innerHTML = '<strong>Torbellino rojo</strong><small>Nuevo · filamentos y chispas</small>';
+    card.style.setProperty('--h', '2'); card.innerHTML = '<strong>Flujo neón</strong><small>Nuevo · referencia del video</small>';
     card.addEventListener('click', () => { select.value = mode; select.dispatchEvent(new Event('change', { bubbles: true })); stage.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
     grid.append(card);
   }
