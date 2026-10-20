@@ -45,7 +45,7 @@ if (typeof window !== 'undefined') (() => {
     ['plasma','Plasma','plasmaWebGLCanvas'],
     ['fluidGas','Fluid','fluidGasCanvas'],
     ['electricIris','Iris eléctrico','electricIrisCanvas'],
-    ['lagrangian:vortex','Vórtice','lagrangianCanvas']
+    ['lagrangian:currents','Corrientes','lagrangianCanvas']
   ];
   const selector = document.getElementById('visualMode');
   const player = document.getElementById('audio');

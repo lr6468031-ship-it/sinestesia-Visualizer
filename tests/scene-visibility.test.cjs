@@ -33,7 +33,7 @@ test('closed audio gates leave scene visibility and transport controls to their 
   player.paused = false;
   frame();
   assert.equal(window.sinestesiaStrictGateOpen, false);
-  selector.value = 'lagrangian:vortex';
+  selector.value = 'lagrangian:currents';
   frame();
   assert.equal(window.sinestesiaStrictGateOpen, true);
   selector.value = 'fluidGas';

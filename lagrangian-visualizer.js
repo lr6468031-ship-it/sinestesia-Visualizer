@@ -67,25 +67,6 @@ if (typeof document !== 'undefined') (() => {
   const lightLayer = document.createElement('canvas'), light = lightLayer.getContext('2d');
   const bloomLayer = document.createElement('canvas'), bloom = bloomLayer.getContext('2d');
   const appearance = { hue: 0, range: 0.06, bloom: true, light: 1.4 };
-  const studio = document.createElement('details');
-  studio.id = 'vortexStudio'; studio.className = 'spectrum-card'; studio.hidden = true;
-  studio.innerHTML = `<summary>Ajustes del vórtice · brillo y color</summary>
-    <p class="spectrum-help">El brillo ilumina los mismos 1.400 trazos. Color y variación usan el mismo rango que Fluid; −1 activa multicolor.</p>
-    <div class="fluid-settings">
-      <label>Resplandor<input id="vortexBloom" type="checkbox" checked aria-label="Resplandor del vórtice"><output></output></label>
-      <label>Luz<input id="vortexLight" type="range" min="0" max="2" step="0.05" value="1.4" aria-label="Luz del vórtice"><output>1.40</output></label>
-      <label>Color · −1 multicolor<input id="vortexHue" type="range" min="-1" max="0.99" step="0.01" value="0" aria-label="Color del vórtice"><output>0.00</output></label>
-      <label>Variación de color<input id="vortexHueRange" type="range" min="0" max="1" step="0.01" value="0.06" aria-label="Variación de color del vórtice"><output>0.06</output></label>
-    </div>`;
-  base.parentElement.insertAdjacentElement('afterend', studio);
-  for (const [id, key] of [['vortexBloom','bloom'],['vortexLight','light'],['vortexHue','hue'],['vortexHueRange','range']]) {
-    const control = studio.querySelector('#' + id);
-    control.addEventListener('input', () => {
-      appearance[key] = control.type === 'checkbox' ? control.checked : Number(control.value);
-      control.nextElementSibling.textContent = control.type === 'checkbox' ? '' : Number(control.value).toFixed(2);
-      ctx.clearRect(0,0,surface.width,surface.height);
-    });
-  }
   // Fluid uses normalized HSV hue plus a bounded hue variation, at full saturation.
   function color(hue, saturation = 1) {
     const h = ((hue % 1) + 1) % 1, i = Math.floor(h * 6), f = h * 6 - i;
@@ -95,9 +76,8 @@ if (typeof document !== 'undefined') (() => {
   }
   let active = false, last = 0, time = 0, frame = 0, pointer = null;
   function choose() {
-    active = window.sinestesiaAnalysisMode === 'separation' ? window.sinestesiaStemRouter.active('lagrangian:vortex') : selector.value.startsWith('lagrangian:');
+    active = window.sinestesiaAnalysisMode === 'separation' ? window.sinestesiaStemRouter.active('lagrangian:currents') : selector.value.startsWith('lagrangian:');
     surface.style.display = active ? 'block' : 'none';
-    studio.hidden = !active || (window.sinestesiaAnalysisMode !== 'separation' && selector.value !== 'lagrangian:vortex');
     if (active) {
       base.style.visibility = 'hidden';
       const notice = document.getElementById('visualNotice');
@@ -120,9 +100,9 @@ if (typeof document !== 'undefined') (() => {
     const w=Math.max(1,Math.round(r.width*scale)), h=Math.max(1,Math.round(r.height*scale));
     if(surface.width!==w || surface.height!==h) {surface.width=w;surface.height=h;}
     const playing=typeof audio!=='undefined' && !audio.paused;
-    const s=window.sinestesiaStemRouter?.signal('lagrangian:vortex') ?? (playing && typeof fastBeatSignal==='function' ? fastBeatSignal() : {bass:0,mid:0,treble:0,kick:0});
+    const s=window.sinestesiaStemRouter?.signal('lagrangian:currents') ?? (playing && typeof fastBeatSignal==='function' ? fastBeatSignal() : {bass:0,mid:0,treble:0,kick:0});
     const gain=Number(document.getElementById('fluidIntensity')?.value)||1.35;
-    const model=window.sinestesiaAnalysisMode === 'separation' ? 'vortex' : selector.value.split(':')[1];
+    const model=window.sinestesiaAnalysisMode === 'separation' ? 'currents' : selector.value.split(':')[1];
     const vortex = model === 'vortex';
     // On the vortex, intensity changes light, not speed or particle count.
     const speed=(playing ? .35+Math.min(1,s.mid||0)*2 : .25)*(vortex ? 1.35 : gain);

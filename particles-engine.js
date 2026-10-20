@@ -49,7 +49,6 @@
     field: { label: 'Campo APK', values: { attractor: 1.10, circularForce: 1.35, turbulence: 1.25, airResistance: 0.62, speed: 1.00, lifetime: 9.0, glow: 1.0, trail: 0.19 } },
     vortex: { label: 'Vórtice', values: { attractor: 0.78, circularForce: 2.25, turbulence: 0.82, airResistance: 0.48, speed: 1.18, lifetime: 11.0, glow: 1.15, trail: 0.14 } },
     reactor: { label: 'Reactor', values: { attractor: 2.10, circularForce: 1.05, turbulence: 2.35, airResistance: 0.36, speed: 1.55, lifetime: 5.8, glow: 1.45, trail: 0.12 } },
-    nebula: { label: 'Nebulosa', values: { attractor: 0.55, circularForce: 0.82, turbulence: 1.70, airResistance: 0.85, speed: 0.72, lifetime: 14.0, glow: 1.25, trail: 0.08 } },
   };
 
   // Separate particle systems: each mode owns emission, integration and projection.
