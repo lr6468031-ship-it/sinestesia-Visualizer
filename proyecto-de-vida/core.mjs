@@ -14,14 +14,133 @@ export function weekStart(day){const d=new Date(day+'T12:00:00Z');return shiftDa
 export function fresh(){return {app:APP,version:1,profile:{name:'',purpose:''},goals:[],tasks:[],habits:[],journal:[],sessions:[],timer:null};}
 export function targetAt(habit,day){const targets=[...habit.targets].sort((a,b)=>a.from.localeCompare(b.from));const i=findFirstIndexBsearch(targets,t=>t.from>day);return (i===-1?targets.at(-1):targets[i-1])?.value||habit.target;}
 export function habitValue(habit,day){return habit.logs[day]||0;}
-export function habitDone(habit,day){return habit.created<=day&&habitValue(habit,day)>=targetAt(habit,day);}
+export function habitDone(habit,day){return habitScheduled(habit,day)&&habitValue(habit,day)>=targetAt(habit,day);}
 export function setTarget(habit,from,value){habit.targets=habit.targets.filter(t=>t.from!==from);habit.targets.push({from,value});habit.targets.sort((a,b)=>a.from.localeCompare(b.from));habit.target=value;}
-export function streak(habit,day){let cursor=day,count=0;if(!habitDone(habit,cursor))cursor=shiftDay(cursor,-1);for(let i=0;i<36600&&cursor>=habit.created;i++,cursor=shiftDay(cursor,-1)){if(!habitDone(habit,cursor))break;count++;}return count;}
+export const WEEKDAYS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+export const ALL_DAYS=[0,1,2,3,4,5,6];
+export function weekday(day){return (new Date(day+'T12:00:00Z').getUTCDay()+6)%7;}
+function lastSchedule(records,day){return [...records].filter(r=>r.from<=day).sort((a,b)=>a.from.localeCompare(b.from)).at(-1);}
+export function habitScheduled(habit,day){
+ if(day<habit.created)return false;
+ const history=habit.daySchedules||[];
+ const record=lastSchedule(history,day);
+ return (record?.days||habit.weekDays||ALL_DAYS).includes(weekday(day));
+}
+export function setHabitDays(habit,from,days){
+ if(!habit.daySchedules?.length)habit.daySchedules=[{from:habit.created,days:[...(habit.weekDays||ALL_DAYS)]}];
+ habit.daySchedules=habit.daySchedules.filter(r=>r.from!==from);
+ habit.daySchedules.push({from,days:[...days]});habit.daySchedules.sort((a,b)=>a.from.localeCompare(b.from));
+ habit.weekDays=[...days];
+}
+export function streak(habit,day){
+ let count=0;
+ for(let cursor=day,i=0;i<36600&&cursor>=habit.created;i++,cursor=shiftDay(cursor,-1)){
+  if(!habitScheduled(habit,cursor))continue;
+  if(habitDone(habit,cursor)){count++;continue;}
+  if(cursor!==day)break;
+ }
+ return count;
+}
+export function isRepeating(task){return !!task.repeatDays?.length;}
+export function taskScheduled(task,day){
+ if(task.archivedOn&&day>task.archivedOn)return false;
+ const records=task.scheduleHistory||[];
+ const record=records.length?lastSchedule(records,day):{date:task.date,days:task.repeatDays||[]};
+ if(!record||day<record.date)return false;
+ return record.days.length?record.days.includes(weekday(day)):record.date===day;
+}
+export function taskStatus(task,day){
+ if(task.occurrences&&Object.hasOwn(task.occurrences,day))return task.occurrences[day];
+ return !isRepeating(task)&&task.date===day?task.status:'todo';
+}
+export function taskOccurrence(task,day){return {...task,date:day,status:taskStatus(task,day),occurrenceDay:day,recurring:isRepeating(task)};}
+export function taskOccurrences(state,start,end){
+ const items=[];
+ for(const task of state.tasks){
+  for(let day=start,i=0;day<=end&&i<36600;day=shiftDay(day,1),i++){
+   if(taskScheduled(task,day)||Object.hasOwn(task.occurrences||{},day))items.push(taskOccurrence(task,day));
+  }
+ }
+ return items;
+}
+export function toggleTask(state,id,day,completedOn=day){
+ const task=state.tasks.find(t=>t.id===id);if(!task)return;
+ const next=taskStatus(task,day)==='done'?'todo':'done';
+ task.occurrences??={};task.occurrences[day]=next;
+ if(!isRepeating(task)&&task.date===day){task.status=next;task.completed=next==='done'?completedOn:'';}
+}
+export function setTaskSchedule(task,date,days,from){
+ const oldDays=task.repeatDays||[];
+ if(task.date===date&&JSON.stringify(oldDays)===JSON.stringify(days))return;
+ if(!task.scheduleHistory?.length)task.scheduleHistory=[{from:task.date,date:task.date,days:[...oldDays]}];
+ // Preserve completed and deleted occurrences when changing the future schedule.
+ if(!oldDays.length&&task.status!=='todo'){task.occurrences??={};task.occurrences[task.date]=task.status;}
+ if(!oldDays.length&&!days.length){task.scheduleHistory=[];}
+ else {
+  task.scheduleHistory=task.scheduleHistory.filter(r=>r.from!==from);
+  task.scheduleHistory.push({from,date,days:[...days]});
+  task.scheduleHistory.sort((a,b)=>a.from.localeCompare(b.from));
+ }
+ task.date=date;task.repeatDays=[...days];
+ task.status=task.occurrences?.[date]||'todo';
+ if(task.status!=='done')task.completed='';
+}
+export function deleteTask(state,id,day,series=false){
+ const task=state.tasks.find(t=>t.id===id);if(!task)return;
+ task.occurrences??={};
+ if(series&&isRepeating(task)){
+  task.archivedOn=day;
+  if(taskScheduled(task,day)&&taskStatus(task,day)!=='done')task.occurrences[day]='deleted';
+ }else{
+  task.occurrences[day]='deleted';
+  if(!isRepeating(task)&&task.date===day)task.status='deleted';
+ }
+}
+export function restoreTask(state,id,day){
+ const task=state.tasks.find(t=>t.id===id);if(!task)return;
+ task.occurrences??={};task.occurrences[day]='todo';task.archivedOn='';
+ if(!isRepeating(task)&&task.date===day){task.status='todo';task.completed='';}
+}
 export function tasksForGoal(state,id){return state.tasks.filter(t=>t.goalId===id);}
-export function progress(state,id){return goalProgress(tasksForGoal(state,id));}
-export function dayScore(state,day){const habits=state.habits.filter(h=>h.created<=day);const tasks=state.tasks.filter(t=>t.date===day);const total=habits.length+tasks.length;return total?(habits.filter(h=>habitDone(h,day)).length+tasks.filter(t=>t.status==='done').length)/total:0;}
-export function dueTasks(state,day){return state.tasks.filter(t=>t.date===day||(t.status!=='done'&&t.date<day));}
-export function planTasks(state,day){const candidates=state.tasks.filter(t=>t.status!=='done'&&t.date<=day).sort((a,b)=>b.priority-a.priority||a.date.localeCompare(b.date)||a.created.localeCompare(b.created));let used=0;return candidates.filter(t=>{if(used+t.minutes>120)return false;used+=t.minutes;return true;}).slice(0,3);}
+export function progress(state,id){
+ const tasks=tasksForGoal(state,id),now=today(),items=[];
+ for(const task of tasks){
+  if(!isRepeating(task)&&!task.scheduleHistory?.some(r=>r.days.length)){if(task.status!=='deleted')items.push(task);continue;}
+  const start=[task.date,...(task.scheduleHistory||[]).map(r=>r.from)].sort()[0];
+  items.push(...taskOccurrences({tasks:[task]},start,now).filter(t=>t.status!=='deleted'));
+ }
+ return goalProgress(items);
+}
+export function dayScore(state,day){
+ const habits=state.habits.filter(h=>habitScheduled(h,day)),tasks=taskOccurrences(state,day,day);
+ const total=habits.length+tasks.length;
+ return total?(habits.filter(h=>habitDone(h,day)).length+tasks.filter(t=>t.status==='done').length)/total:0;
+}
+export function dayHasPlan(state,day){return state.habits.some(h=>habitScheduled(h,day))||taskOccurrences(state,day,day).length>0;}
+export function activityStreak(state,day){
+ const starts=[...state.tasks.flatMap(t=>[t.created,t.date,...Object.keys(t.occurrences||{})]),...state.habits.map(h=>h.created)];if(!starts.length)return 0;
+ const first=starts.sort()[0];let count=0;
+ for(let cursor=day,i=0;cursor>=first&&i<36600;cursor=shiftDay(cursor,-1),i++){
+  const done=state.habits.some(h=>habitDone(h,cursor))||taskOccurrences(state,cursor,cursor).some(t=>t.status==='done');
+  if(done){count++;continue;}
+  if(cursor!==day&&dayHasPlan(state,cursor))break;
+ }
+ return count;
+}
+export function taskSummary(state,start,end){
+ const items=taskOccurrences(state,start,end);
+ const done=items.filter(t=>t.status==='done').length,pending=items.filter(t=>t.status==='todo').length,deleted=items.filter(t=>t.status==='deleted').length;
+ return {items,done,pending,deleted,total:items.length,rate:items.length?done/items.length:0};
+}
+export function dueTasks(state,day){
+ const items=taskOccurrences(state,day,day).filter(t=>t.status!=='deleted');
+ for(const task of state.tasks)if(!isRepeating(task)&&!task.scheduleHistory?.some(r=>r.days.length)&&task.date<day&&task.status==='todo')items.push(taskOccurrence(task,task.date));
+ return items;
+}
+export function planTasks(state,day){
+ const candidates=dueTasks(state,day).filter(t=>t.status==='todo').sort((a,b)=>b.priority-a.priority||a.date.localeCompare(b.date)||a.created.localeCompare(b.created));
+ let used=0;return candidates.filter(t=>{if(used+t.minutes>120)return false;used+=t.minutes;return true;}).slice(0,3);
+}
 export function timerRemaining(timer,now=Date.now()){return !timer?0:Math.max(0,timer.running?timer.endAt-now:timer.remaining);}
 export function settleTimer(state,now=Date.now(),early=false){const timer=state.timer;if(!timer||(!early&&(!timer.running||timer.endAt>now)))return false;const elapsed=Math.max(0,timer.total-timerRemaining(timer,now));if(timer.mode==='focus'&&elapsed>=60000&&!state.sessions.some(s=>s.id===timer.id))state.sessions.push({id:timer.id,day:timer.day,taskId:timer.taskId,minutes:Math.min(timer.total/60000,Math.floor(elapsed/60000))});state.timer=null;return true;}
 export function validateBackup(raw){
@@ -34,10 +153,28 @@ export function validateBackup(raw){
  const id=v=>{const s=str(v,80);if(!/^[\w-]+$/.test(s))bad();return s;};
  const arr=v=>{if(!Array.isArray(v)||v.length>10000)bad();return v;};
  const area=v=>{if(!Object.hasOwn(AREAS,v))bad();return v;};
+ const days=v=>{const list=arr(v);if(list.some(d=>!Number.isInteger(d)||d<0||d>6)||new Set(list).size!==list.length)bad();return [...list].sort((a,b)=>a-b);};
  out.profile={name:str(raw.profile?.name,60),purpose:str(raw.profile?.purpose,1000)};
  out.goals=arr(raw.goals).map(g=>({id:id(g.id),title:title(g.title),area:area(g.area),why:str(g.why,1000),deadline:g.deadline?date(g.deadline):'',created:date(g.created)}));
- out.tasks=arr(raw.tasks).map(t=>{if(!['todo','done'].includes(t.status))bad();return {id:id(t.id),title:title(t.title),goalId:t.goalId?id(t.goalId):'',date:date(t.date),priority:num(t.priority,1,3),minutes:num(t.minutes,1,480),status:t.status,created:date(t.created),completed:t.completed?date(t.completed):''};});
- out.habits=arr(raw.habits).map(h=>{const logs={};if(!h.logs||typeof h.logs!=='object'||Array.isArray(h.logs)||Object.keys(h.logs).length>36600)bad();for(const [d,v] of Object.entries(h.logs))logs[date(d)]=num(v);return {id:id(h.id),title:title(h.title),area:area(h.area),unit:str(h.unit,30),target:num(h.target,1),step:num(h.step,1),created:date(h.created),targets:arr(h.targets).map(t=>({from:date(t.from),value:num(t.value,1)})),logs};});
+ out.tasks=arr(raw.tasks).map(t=>{
+  if(!['todo','done','deleted'].includes(t.status))bad();
+  const occurrences={};
+  if(t.occurrences!==undefined){if(!t.occurrences||Array.isArray(t.occurrences)||typeof t.occurrences!=='object'||Object.keys(t.occurrences).length>36600)bad();for(const [day,status] of Object.entries(t.occurrences)){if(!['todo','done','deleted'].includes(status))bad();occurrences[date(day)]=status;}}
+  const result={id:id(t.id),title:title(t.title),goalId:t.goalId?id(t.goalId):'',date:date(t.date),priority:num(t.priority,1,3),minutes:num(t.minutes,1,480),status:t.status,created:date(t.created),completed:t.completed?date(t.completed):''};
+  // Optional fields keep all existing version-1 backups and data compatible.
+  if(t.repeatDays!==undefined)result.repeatDays=days(t.repeatDays);
+  if(t.occurrences!==undefined)result.occurrences=occurrences;
+  if(t.archivedOn!==undefined)result.archivedOn=t.archivedOn?date(t.archivedOn):'';
+  if(t.scheduleHistory!==undefined)result.scheduleHistory=arr(t.scheduleHistory).map(r=>({from:date(r.from),date:date(r.date),days:days(r.days)}));
+  return result;
+ });
+ out.habits=arr(raw.habits).map(h=>{
+  const logs={};if(!h.logs||typeof h.logs!=='object'||Array.isArray(h.logs)||Object.keys(h.logs).length>36600)bad();for(const [d,v] of Object.entries(h.logs))logs[date(d)]=num(v);
+  const result={id:id(h.id),title:title(h.title),area:area(h.area),unit:str(h.unit,30),target:num(h.target,1),step:num(h.step,1),created:date(h.created),targets:arr(h.targets).map(t=>({from:date(t.from),value:num(t.value,1)})),logs};
+  if(h.weekDays!==undefined){result.weekDays=days(h.weekDays);if(!result.weekDays.length)bad();}
+  if(h.daySchedules!==undefined)result.daySchedules=arr(h.daySchedules).map(r=>{const d=days(r.days);if(!d.length)bad();return {from:date(r.from),days:d};});
+  return result;
+ });
  out.journal=arr(raw.journal).map(j=>({day:date(j.day),mood:num(j.mood,1,5),energy:num(j.energy,1,5),wins:str(j.wins,5000),notes:str(j.notes,5000)}));
  out.sessions=arr(raw.sessions).map(s=>({id:id(s.id),day:date(s.day),taskId:s.taskId?id(s.taskId):'',minutes:num(s.minutes,1,480)}));
  for(const list of [out.goals,out.tasks,out.habits,out.sessions])if(new Set(list.map(x=>x.id)).size!==list.length)bad();
