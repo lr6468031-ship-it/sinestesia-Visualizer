@@ -13,6 +13,10 @@ node --test proyecto-de-vida/tests/*.test.mjs
 
 Abrir `/proyecto-de-vida/` en el navegador. Para el uso sin conexión se necesita HTTPS o localhost y una primera carga conectada. `npm run build:web` del repositorio incluye esta aplicación en `dist/proyecto-de-vida/`.
 
+## Versión Android
+
+El APK independiente incluye todos los archivos para funcionar sin conexión desde el primer inicio. Compilación, firma, instalación y traslado de datos de la web: [android/README.md](android/README.md). Se instala como **Proyecto de vida** (`com.proyectodevida.app`).
+
 ## Datos
 
 Los datos personales permanecen en `localStorage` del dispositivo, bajo `proyecto-de-vida-v1`; no se transmiten a los proyectos de referencia ni a un servidor. No hay cuentas, sincronización remota ni recuperación de contraseña. Exportar un respaldo antes de borrar los datos del navegador. Las importaciones se validan y requieren confirmación antes de reemplazar datos. Antes de importar se conserva adicionalmente una copia local en `proyecto-de-vida-v1-antes-de-importar`.

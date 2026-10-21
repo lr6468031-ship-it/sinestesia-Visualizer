@@ -1,0 +1,75 @@
+name: Publish Proyecto de vida APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'downloads/proyecto-de-vida.apk'
+      - 'downloads/proyecto-de-vida.apk.sha256'
+      - 'downloads/proyecto-de-vida-release.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: proyecto-de-vida-apk-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify signed APK and source revision
+        id: release
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess, zipfile
+          directory = pathlib.Path('downloads')
+          info = json.loads((directory / 'proyecto-de-vida-release.json').read_text())
+          apk = directory / 'proyecto-de-vida.apk'
+          assert re.fullmatch(r'\d+\.\d+\.\d+', info['version'])
+          assert re.fullmatch(r'[a-f0-9]{40}', info['sourceCommit'])
+          assert hashlib.sha256(apk.read_bytes()).hexdigest() == info['sha256']
+          subprocess.run(['sha256sum', '-c', 'proyecto-de-vida.apk.sha256'], cwd=directory, check=True)
+          tools = pathlib.Path(os.environ['ANDROID_HOME']) / 'build-tools' / '35.0.0'
+          signature = subprocess.check_output([str(tools / 'apksigner'), 'verify', '--verbose', '--print-certs', str(apk)], text=True)
+          assert f"Signer #1 certificate SHA-256 digest: {info['certificateSha256']}" in signature
+          badging = subprocess.check_output([str(tools / 'aapt2'), 'dump', 'badging', str(apk)], text=True)
+          assert "package: name='com.proyectodevida.app'" in badging
+          assert f"versionName='{info['version']}'" in badging
+          assert f"versionCode='{info['versionCode']}'" in badging
+          assert 'application-debuggable' not in badging
+          with zipfile.ZipFile(apk) as package:
+              build = json.loads(package.read('assets/public/build-info.json'))
+              assert build['sourceCommit'] == info['sourceCommit']
+              assert build['version'] == info['version']
+              assert build['versionCode'] == info['versionCode']
+              for name in ('app.mjs', 'core.mjs', 'life-flame.mjs', 'flame-theme.css', 'native-bridge.js', 'assets/life-flame-loop.mp4', 'LICENSE', 'THIRD_PARTY.md'):
+                  assert package.getinfo('assets/public/' + name).file_size > 0
+          subprocess.run(['git', 'merge-base', '--is-ancestor', info['sourceCommit'], 'HEAD'], check=True)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"tag=proyecto-de-vida-v{info['version']}\n")
+              output.write(f"source={info['sourceCommit']}\n")
+              output.write(f"version={info['version']}\n")
+          print('Release APK signature, identity, assets and source revision verified.')
+          PY
+
+      - name: Publish downloadable Android release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIFE_TAG: ${{ steps.release.outputs.tag }}
+          LIFE_SOURCE: ${{ steps.release.outputs.source }}
+          LIFE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          gh release create "$LIFE_TAG" \
+            --target "$LIFE_SOURCE" \
+            --title "Proyecto de vida $LIFE_VERSION para Android" \
+            --notes-file proyecto-de-vida/android/RELEASE_NOTES.md \
+            downloads/proyecto-de-vida.apk \
+            downloads/proyecto-de-vida.apk.sha256 \
+            downloads/proyecto-de-vida-release.json

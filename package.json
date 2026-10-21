@@ -6,6 +6,7 @@
     "android:add": "cap add android",
     "android:sync": "cap sync android",
     "build:web": "node scripts/build-web.mjs",
+    "build:life:android": "node scripts/build-life-android.mjs",
     "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {
