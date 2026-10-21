@@ -62,5 +62,12 @@ await copyFile(join(root,'vendor/onnxruntime/LICENSE'), join(assetDir,'LICENSE-o
 await copyFile(join(root,'vendor/onnxruntime/ThirdPartyNotices.txt'), join(assetDir,'ThirdPartyNotices-onnxruntime.txt'));
 for (const file of ['ort-wasm-simd-threaded.jsep.wasm','ort-wasm-simd-threaded.jsep.mjs','ort-wasm-simd-threaded.asyncify.wasm','ort-wasm-simd-threaded.asyncify.mjs']) await copyFile(join(root,'node_modules/onnxruntime-web/dist',file), join(assetDir,file));
 await build({ entryPoints: [join(root,'separation-worker.js')], bundle: true, format: 'esm', platform: 'browser', target: 'es2022', outfile: join(assetDir,'worker.js'), minify: true, legalComments: 'eof' });
+await cp(join(root,'proyecto-de-vida'),join(out,'proyecto-de-vida'),{recursive:true});
+// Change the offline cache whenever the independent app's assets change.
+const lifeHash=createHash('sha256');
+for(const file of ['index.html','styles.css','app.mjs','core.mjs','manifest.webmanifest','vendor/lifeos.mjs','vendor/neohabit.mjs','vendor/beaverhabits.mjs','vendor/super-productivity.mjs'])lifeHash.update(await readFile(join(root,'proyecto-de-vida',file)));
+const lifeWorker=join(out,'proyecto-de-vida/sw.js');
+await writeFile(lifeWorker,(await readFile(lifeWorker,'utf8')).replace('proyecto-de-vida-v1','proyecto-de-vida-'+lifeHash.digest('hex').slice(0,12)));
+
 await writeFile(join(out,'.nojekyll'),'');
 console.log(`Built web app with checksum-verified AI model in ${out}`);

@@ -29,6 +29,7 @@ on:
       - 'controls.js'
       - 'separation*'
       - 'scripts/**'
+      - 'proyecto-de-vida/**'
       - 'vendor/**'
       - 'package-lock.json'
       - 'package.json'
@@ -61,6 +62,9 @@ jobs:
           cache: npm
       - name: Install pinned dependencies
         run: npm ci
+      - name: Validate Proyecto de vida
+        run: node --test proyecto-de-vida/tests/*.test.mjs
+
       - name: Prepare site and verified AI model
         run: npm run build:web -- --outdir site
 
