@@ -35,7 +35,7 @@ cd app/build/outputs/apk/release
 "$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 app-release-unsigned.apk proyecto-de-vida-aligned.apk
 "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
   --ks "$LIFE_KEYSTORE" --ks-key-alias proyecto-de-vida \
-  --ks-pass "file:$LIFE_STOREPASS_FILE" --key-pass "file:$LIFE_STOREPASS_FILE" \
+  --ks-pass "file:$LIFE_STOREPASS_FILE" \
   --out proyecto-de-vida.apk proyecto-de-vida-aligned.apk
 "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs proyecto-de-vida.apk
 ```
