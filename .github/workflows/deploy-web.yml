@@ -65,6 +65,12 @@ jobs:
       - name: Validate Proyecto de vida
         run: node --test proyecto-de-vida/tests/*.test.mjs
 
+      - name: Restore checksum-verified model
+        uses: actions/cache@v4
+        with:
+          path: .cache/separator/htdemucs.onnx
+          key: demucs-1.0.0-da9e5101ee0804d04933974b59d8aae9c862e80e14f2f24e7c74cae76bdbe748
+
       - name: Prepare site and verified AI model
         run: npm run build:web -- --outdir site
 

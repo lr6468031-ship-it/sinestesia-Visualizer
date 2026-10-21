@@ -1,4 +1,4 @@
-import { mkdir, copyFile, readFile, writeFile, cp } from 'node:fs/promises';
+import { mkdir, copyFile, readFile, writeFile, cp, rename, rm } from 'node:fs/promises';
 import { existsSync, createReadStream, createWriteStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
@@ -6,6 +6,13 @@ import { Readable } from 'node:stream';
 import { execFileSync } from 'node:child_process';
 import { resolve, join } from 'node:path';
 import { build } from 'esbuild';
+// Surface packaging failures in the Actions summary even when full logs need sign-in.
+process.on('uncaughtException', error => {
+  const detail = error.cause ? `${error.message}: ${error.cause.message}` : error.message;
+  console.error('::error title=Web build failed::' + String(detail).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A'));
+  console.error(error);
+  process.exit(1);
+});
 const root = resolve(import.meta.dirname, '..');
 const arg = process.argv.indexOf('--outdir');
 const out = resolve(root, arg >= 0 ? process.argv[arg + 1] : 'dist');
@@ -20,9 +27,22 @@ if (!existsSync(model) || await digest(model, 'sha256') !== modelHash) {
   const integrity = 'c6D0GHEnQz/1zdRQNLy1uCZdCByPnKHcYOs4a3VuMgrYNF7V2PgNQ1fQavue1DE40ow3xD7RWz92RxdWQNFTMw==';
   if (!existsSync(tarball) || await digest(tarball, 'sha512') !== integrity) {
     console.log('Downloading pinned Demucs 1.0.0 model package (~98 MB compressed)…');
-    const response = await fetch('https://registry.npmjs.org/demucs/-/demucs-1.0.0.tgz');
-    if (!response.ok) throw new Error(`Model package HTTP ${response.status}`);
-    await pipeline(Readable.fromWeb(response.body), createWriteStream(tarball));
+    const temporary = tarball + '.part';
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await fetch('https://registry.npmjs.org/demucs/-/demucs-1.0.0.tgz', { signal: AbortSignal.timeout(120000) });
+        if (!response.ok) throw new Error(`Model package HTTP ${response.status}`);
+        await pipeline(Readable.fromWeb(response.body), createWriteStream(temporary));
+        if (await digest(temporary, 'sha512') !== integrity) throw new Error('Model package integrity mismatch');
+        await rename(temporary, tarball);
+        break;
+      } catch (error) {
+        await rm(temporary, { force: true });
+        console.error(`Verified model download attempt ${attempt}/3 failed: ${error.message}`);
+        if (attempt === 3 || error.message === 'Model package integrity mismatch') throw error;
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+      }
+    }
   }
   if (await digest(tarball, 'sha512') !== integrity) throw new Error('Model package integrity mismatch');
   execFileSync('tar', ['-xzf', tarball, '-C', cache, '--strip-components=1', 'package/htdemucs.onnx']);
