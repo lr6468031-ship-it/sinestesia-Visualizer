@@ -145,10 +145,24 @@ export function dueTasks(state,day){
 }
 export function planTasks(state,day){
  const candidates=dueTasks(state,day).filter(t=>t.status==='todo').sort((a,b)=>b.priority-a.priority||a.date.localeCompare(b.date)||a.created.localeCompare(b.created));
- let used=0;return candidates.filter(t=>{if(used+t.minutes>120)return false;used+=t.minutes;return true;}).slice(0,3);
+ let used=0;return candidates.filter(t=>{const seconds=taskDurationSeconds(t);if(used+seconds>7200)return false;used+=seconds;return true;}).slice(0,3);
 }
+export const MAX_DURATION_SECONDS=24*60*60;
+export function durationFromParts(hours,minutes,seconds){
+ if(![hours,minutes,seconds].every(Number.isInteger)||hours<0||hours>24||minutes<0||minutes>60||seconds<0||seconds>60)return NaN;
+ return Math.min(MAX_DURATION_SECONDS,hours*3600+minutes*60+seconds);
+}
+export function durationParts(seconds){const total=Math.max(0,Math.floor(seconds));return {hours:Math.floor(total/3600),minutes:Math.floor(total/60)%60,seconds:total%60};}
+export function taskDurationSeconds(task){return task?.durationSeconds??Math.round((task?.minutes??25)*60);}
+export function sessionSeconds(session){return session.seconds??Math.round(session.minutes*60);}
+export function formatDuration(seconds){const p=durationParts(seconds);return [p.hours?`${p.hours} h`:'',p.minutes?`${p.minutes} min`:'',p.seconds?`${p.seconds} s`:''].filter(Boolean).join(' ')||'0 s';}
 export function timerRemaining(timer,now=Date.now()){return !timer?0:Math.max(0,timer.running?timer.endAt-now:timer.remaining);}
-export function settleTimer(state,now=Date.now(),early=false){const timer=state.timer;if(!timer||(!early&&(!timer.running||timer.endAt>now)))return false;const elapsed=Math.max(0,timer.total-timerRemaining(timer,now));if(timer.mode==='focus'&&elapsed>=60000&&!state.sessions.some(s=>s.id===timer.id))state.sessions.push({id:timer.id,day:timer.day,taskId:timer.taskId,minutes:Math.min(timer.total/60000,Math.floor(elapsed/60000))});state.timer=null;return true;}
+export function settleTimer(state,now=Date.now(),early=false){
+ const timer=state.timer;if(!timer||(!early&&(!timer.running||timer.endAt>now)))return false;
+ const seconds=Math.floor(Math.max(0,Math.min(timer.total,timer.total-timerRemaining(timer,now)))/1000);
+ if(timer.mode==='focus'&&seconds>=1&&!state.sessions.some(s=>s.id===timer.id))state.sessions.push({id:timer.id,day:timer.day,taskId:timer.taskId,seconds,minutes:seconds/60});
+ state.timer=null;return true;
+}
 export function validateBackup(raw){
  const bad=()=>{throw Error('El archivo no es un respaldo válido de Proyecto de vida.');};
  if(!raw||raw.app!==APP||raw.version!==1)bad();const out=fresh();
@@ -166,7 +180,9 @@ export function validateBackup(raw){
   if(!['todo','done','deleted'].includes(t.status))bad();
   const occurrences={};
   if(t.occurrences!==undefined){if(!t.occurrences||Array.isArray(t.occurrences)||typeof t.occurrences!=='object'||Object.keys(t.occurrences).length>36600)bad();for(const [day,status] of Object.entries(t.occurrences)){if(!['todo','done','deleted'].includes(status))bad();occurrences[date(day)]=status;}}
-  const result={id:id(t.id),title:title(t.title),goalId:t.goalId?id(t.goalId):'',date:date(t.date),priority:num(t.priority,1,3),minutes:num(t.minutes,1,480),status:t.status,created:date(t.created),completed:t.completed?date(t.completed):''};
+  const exact=t.durationSeconds!==undefined;
+  const result={id:id(t.id),title:title(t.title),goalId:t.goalId?id(t.goalId):'',date:date(t.date),priority:num(t.priority,1,3),minutes:num(t.minutes,exact?1/60:1,exact?1440:480),status:t.status,created:date(t.created),completed:t.completed?date(t.completed):''};
+  if(exact){result.durationSeconds=num(t.durationSeconds,1,MAX_DURATION_SECONDS);if(!Number.isInteger(result.durationSeconds)||Math.abs(result.minutes-result.durationSeconds/60)>1e-9)bad();}
   // Optional fields keep all existing version-1 backups and data compatible.
   if(t.repeatDays!==undefined)result.repeatDays=days(t.repeatDays);
   if(t.occurrences!==undefined)result.occurrences=occurrences;
@@ -182,7 +198,11 @@ export function validateBackup(raw){
   return result;
  });
  out.journal=arr(raw.journal).map(j=>({day:date(j.day),mood:num(j.mood,1,5),energy:num(j.energy,1,5),wins:str(j.wins,5000),notes:str(j.notes,5000)}));
- out.sessions=arr(raw.sessions).map(s=>({id:id(s.id),day:date(s.day),taskId:s.taskId?id(s.taskId):'',minutes:num(s.minutes,1,480)}));
+ out.sessions=arr(raw.sessions).map(s=>{
+  const exact=s.seconds!==undefined,result={id:id(s.id),day:date(s.day),taskId:s.taskId?id(s.taskId):'',minutes:num(s.minutes,exact?1/60:1,exact?1440:480)};
+  if(exact){result.seconds=num(s.seconds,1,MAX_DURATION_SECONDS);if(!Number.isInteger(result.seconds)||Math.abs(result.minutes-result.seconds/60)>1e-9)bad();}
+  return result;
+ });
  for(const list of [out.goals,out.tasks,out.habits,out.sessions])if(new Set(list.map(x=>x.id)).size!==list.length)bad();
  if(new Set(out.journal.map(j=>j.day)).size!==out.journal.length)bad();
  const goals=new Set(out.goals.map(g=>g.id));if(out.tasks.some(t=>t.goalId&&!goals.has(t.goalId)))bad();
