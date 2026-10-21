@@ -43,3 +43,9 @@ El plan incluye tareas pendientes del día y atrasadas, junto con las completada
 El mismo elemento de video se conserva al registrar tareas y navegar para evitar reinicios. Se pausa fuera de pantalla, con la pestaña oculta y al navegar a otra sección. Con movimiento reducido se muestra la imagen estática con el tamaño y la luz correspondientes. Si el navegador solicita una interacción para reproducir, aparece «Animar llama»; si no puede cargar el clip, se mantiene un respaldo de filamentos sobre Canvas 2D con los mismos parámetros de progreso.
 
 El service worker almacena el clip completo y admite solicitudes de rangos de bytes para reproducción, desplazamiento y repetición sin conexión en navegadores móviles. No cambia tareas, hábitos, sesiones, rachas ni respaldos.
+
+## Tema de la llama
+
+`flame-theme.css` aplica la paleta de la llama a todas las pantallas: azul oscuro de fondo, superficies azul profundo, texto blanco azulado, navegación cian y acciones en naranja y dorado. Incluye formularios, controles de duración, días de la semana, diario, temporizador, estadísticas, avisos y diálogos. Los estados de cumplimiento conservan sus significados rojo, amarillo y verde; el mapa de constancia usa una escala azul–cian.
+
+La barra del navegador, el manifiesto y los iconos de instalación comparten la paleta. El tema se incluye en la caché sin conexión. El cambio es visual; los datos, las tareas, los cronómetros y los niveles de la llama se conservan.

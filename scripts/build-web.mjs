@@ -85,7 +85,7 @@ await build({ entryPoints: [join(root,'separation-worker.js')], bundle: true, fo
 await cp(join(root,'proyecto-de-vida'),join(out,'proyecto-de-vida'),{recursive:true});
 // Change the offline cache whenever the independent app's assets change.
 const lifeHash=createHash('sha256');
-for(const file of ['index.html','styles.css','app.mjs','core.mjs','life-flame.mjs','sw.js','assets/life-flame-loop.mp4','assets/life-flame-poster.webp','manifest.webmanifest','vendor/lifeos.mjs','vendor/neohabit.mjs','vendor/beaverhabits.mjs','vendor/super-productivity.mjs'])lifeHash.update(await readFile(join(root,'proyecto-de-vida',file)));
+for(const file of ['index.html','styles.css','flame-theme.css','icon.svg','icon-192.png','icon-512.png','app.mjs','core.mjs','life-flame.mjs','sw.js','assets/life-flame-loop.mp4','assets/life-flame-poster.webp','manifest.webmanifest','vendor/lifeos.mjs','vendor/neohabit.mjs','vendor/beaverhabits.mjs','vendor/super-productivity.mjs'])lifeHash.update(await readFile(join(root,'proyecto-de-vida',file)));
 const lifeWorker=join(out,'proyecto-de-vida/sw.js');
 await writeFile(lifeWorker,(await readFile(lifeWorker,'utf8')).replace('proyecto-de-vida-v1','proyecto-de-vida-'+lifeHash.digest('hex').slice(0,12)));
 

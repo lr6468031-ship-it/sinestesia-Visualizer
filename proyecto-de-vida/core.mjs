@@ -5,7 +5,7 @@ export {calendarDays} from './vendor/beaverhabits.mjs';
 export {msToClockString} from './vendor/super-productivity.mjs';
 export {goalProgress, objectiveProgress};
 export const APP='proyecto-de-vida', KEY='proyecto-de-vida-v1';
-export const AREAS={salud:{name:'Salud',color:'#60806a',icon:'heart'},aprendizaje:{name:'Aprendizaje',color:'#b88c43',icon:'book'},trabajo:{name:'Trabajo',color:'#71859d',icon:'briefcase'},finanzas:{name:'Finanzas',color:'#a97461',icon:'wallet'},relaciones:{name:'Relaciones',color:'#9c7f9f',icon:'people'},personal:{name:'Personal',color:'#758268',icon:'sun'}};
+export const AREAS={salud:{name:'Salud',color:'#72e5ff',icon:'heart'},aprendizaje:{name:'Aprendizaje',color:'#ffd082',icon:'book'},trabajo:{name:'Trabajo',color:'#8facff',icon:'briefcase'},finanzas:{name:'Finanzas',color:'#ffac76',icon:'wallet'},relaciones:{name:'Relaciones',color:'#f3a4c9',icon:'people'},personal:{name:'Personal',color:'#b5d8ff',icon:'sun'}};
 export const uid=()=>crypto.randomUUID();
 export function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 export function validDate(s){return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s+'T12:00:00Z'))&&new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s;}
