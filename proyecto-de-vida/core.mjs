@@ -127,6 +127,12 @@ export function activityStreak(state,day){
  }
  return count;
 }
+export function completedTasksOn(state,day){
+ return state.tasks.filter(task=>{
+  const repeated=isRepeating(task)||task.scheduleHistory?.some(record=>record.days.length);
+  return repeated?task.occurrences?.[day]==='done':task.status==='done'&&(task.completed||task.date)===day;
+ }).length;
+}
 export function taskSummary(state,start,end){
  const items=taskOccurrences(state,start,end);
  const done=items.filter(t=>t.status==='done').length,pending=items.filter(t=>t.status==='todo').length,deleted=items.filter(t=>t.status==='deleted').length;

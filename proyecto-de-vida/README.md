@@ -29,3 +29,7 @@ Esta aplicación adapta herramientas específicas de cuatro repositorios. No es 
 
 El código de `proyecto-de-vida/` se distribuye bajo GNU AGPL versión 3. Se incluyen las licencias originales de las adaptaciones. Esta licencia corresponde a esta aplicación independiente; no cambia la licencia del visualizador que la aloja en otra ruta. Código fuente completo disponible en:
 https://github.com/lr6468031-ship-it/sinestesia-Visualizer/tree/main/proyecto-de-vida
+
+## Llama animada
+
+`life-flame.mjs` dibuja filamentos luminosos ascendentes, láminas de color, destellos y partículas sobre Canvas 2D. El tamaño aumenta de forma gradual y acotada con las tareas completadas en la fecha elegida; crear tareas pendientes no infla la llama. También cuenta las tareas puntuales que se completan después de su fecha prevista. La animación conserva el mismo lienzo al registrar tareas para que el crecimiento sea continuo. Se pausa fuera de pantalla, con la pestaña oculta y al navegar a otra sección; respeta la preferencia de movimiento reducido. No altera tareas, hábitos, rachas ni respaldos.
