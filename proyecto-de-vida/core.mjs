@@ -143,6 +143,10 @@ export function dueTasks(state,day){
  for(const task of state.tasks)if(!isRepeating(task)&&!task.scheduleHistory?.some(r=>r.days.length)&&task.date<day&&task.status==='todo')items.push(taskOccurrence(task,task.date));
  return items;
 }
+export function flameTaskProgress(state,day){
+ const completed=completedTasksOn(state,day),pending=dueTasks(state,day).filter(task=>task.status==='todo').length,total=completed+pending;
+ return {completed,pending,total,ratio:total?completed/total:0,allCompleted:completed>0&&pending===0};
+}
 export function planTasks(state,day){
  const candidates=dueTasks(state,day).filter(t=>t.status==='todo').sort((a,b)=>b.priority-a.priority||a.date.localeCompare(b.date)||a.created.localeCompare(b.created));
  let used=0;return candidates.filter(t=>{const seconds=taskDurationSeconds(t);if(used+seconds>7200)return false;used+=seconds;return true;}).slice(0,3);

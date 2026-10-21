@@ -10,13 +10,17 @@ function noise(x,y){
  const ix=Math.floor(x),iy=Math.floor(y),u=smooth(x-ix),v=smooth(y-iy);
  return mix(mix(hash(ix,iy),hash(ix+1,iy),u),mix(hash(ix,iy+1),hash(ix+1,iy+1),u),v)*2-1;
 }
-export function flameGrowth(completed){
- const count=Number.isFinite(completed)?Math.max(0,completed):0;
- return .32+.68*(1-Math.exp(-count/5));
+function completionRatio(completed,total){
+ return Number.isFinite(completed)&&Number.isFinite(total)&&total>0?clamp(completed/total,0,1):0;
 }
-export function flameDynamics(completed){
- const count=Number.isFinite(completed)?Math.max(0,completed):0,energy=1-Math.exp(-count/6);
- return {growth:flameGrowth(count),speed:.7+1.8*energy,light:.62+1.18*energy};
+function energyLevel(ratio,low,middle,high){return ratio<=.5?mix(low,middle,ratio*2):mix(middle,high,(ratio-.5)*2);}
+export function flameGrowth(completed,total){const ratio=completionRatio(completed,total);return energyLevel(ratio,.32,.86,.97)+(ratio===1?.03:0);}
+export function flameDynamics(completed,total){
+ const ratio=completionRatio(completed,total);
+ // The previously approved appearance is the midpoint. The upper half has
+ // its own headroom for faster motion, stronger light and a luminous aura.
+ const finished=ratio===1?1:0;
+ return {growth:flameGrowth(completed,total),speed:energyLevel(ratio,.7,2,3)+finished*.4,light:energyLevel(ratio,.62,1.5,2.2)+finished*.5,radiance:smooth(clamp((ratio-.5)*2,0,1))*.65+finished*.35};
 }
 export function createFlameRenderer(){
  const scene=document.createElement('div');scene.className='living-flame-scene';scene.setAttribute('aria-hidden','true');
@@ -25,11 +29,12 @@ export function createFlameRenderer(){
  video.setAttribute('muted','');video.setAttribute('playsinline','');video.setAttribute('disablepictureinpicture','');video.setAttribute('disableremoteplayback','');
  const poster=document.createElement('img');poster.className='living-flame-poster';poster.alt='';
  poster.src=new URL('./assets/life-flame-poster.webp',import.meta.url).href;poster.decoding='async';
- scene.append(poster,video);video.hidden=true;
+ const aura=document.createElement('div');aura.className='living-flame-radiance';
+ scene.append(poster,video,aura);video.hidden=true;
  const playButton=document.createElement('button');playButton.className='flame-play-button';playButton.type='button';playButton.textContent='▶ Animar llama';playButton.hidden=true;
  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
  let host=null,visible=true,frame=0,last=0,pendingPlay=false,blocked=false,failed=false,destroyed=false,initialized=false,fallback=null,options={};
- let target=flameDynamics(0),current={...target};
+ let target=flameDynamics(0,0),current={...target};
  const observer=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{
   for(const entry of entries)if(entry.target===host){visible=entry.isIntersecting;refresh();}
  }):null;
@@ -38,16 +43,18 @@ export function createFlameRenderer(){
  function paint(){
   if(!host)return;
   scene.style.transform=`scale(${current.growth.toFixed(4)})`;
-  scene.style.filter=`brightness(${current.light.toFixed(4)})`;
+  scene.style.filter=`saturate(${(1+current.radiance*.12).toFixed(4)}) brightness(${current.light.toFixed(4)})`;
+  aura.style.opacity=(current.radiance*.5).toFixed(4);aura.style.animationDuration=`${(5/current.speed).toFixed(3)}s`;
+  scene.dataset.radiant=String(current.radiance>.001);
   if(Math.abs(video.playbackRate-current.speed)>.005)video.playbackRate=current.speed;
-  host.dataset.growth=current.growth.toFixed(4);host.dataset.speed=current.speed.toFixed(4);host.dataset.light=current.light.toFixed(4);
+  host.dataset.growth=current.growth.toFixed(4);host.dataset.speed=current.speed.toFixed(4);host.dataset.light=current.light.toFixed(4);host.dataset.radiance=current.radiance.toFixed(4);
   host.dataset.frame=String(Math.round(video.currentTime*1000));
  }
  function schedule(){if(!frame&&canAnimate())frame=requestAnimationFrame(update);}
  function update(now){
   frame=0;if(!canAnimate()){refresh();return;}
   const dt=last?Math.min(.06,(now-last)/1000):1/60;last=now;const ease=1-Math.exp(-dt*3);
-  for(const key of ['growth','speed','light'])current[key]+=(target[key]-current[key])*ease;
+  for(const key of Object.keys(target))current[key]+=(target[key]-current[key])*ease;
   paint();
   // Video decoding supplies the motion; JS only eases task-driven parameters.
   if(!video.paused||Object.keys(target).some(key=>Math.abs(target[key]-current[key])>.0001))schedule();
@@ -56,6 +63,7 @@ export function createFlameRenderer(){
   if(destroyed||failed)return;
   const ready=video.readyState>=2&&!reduced.matches;
   video.hidden=!ready;poster.hidden=ready;
+  scene.dataset.animating=String(!!canAnimate());
   if(!canAnimate()){
    video.pause();stop();playButton.hidden=true;
    if(reduced.matches){current={...target};paint();}
@@ -81,12 +89,12 @@ export function createFlameRenderer(){
  document.addEventListener('visibilitychange',refresh);reduced.addEventListener('change',onPreference);
  return {
   mount(next,nextOptions={}){
-   options=nextOptions;target=flameDynamics(options.completed);
+   options=nextOptions;target=flameDynamics(options.completed,options.total);
    if(host!==next){if(host)observer?.unobserve(host);video.pause();stop();host=next;visible=true;
     if(host&&!failed){host.append(scene,playButton);observer?.observe(host);}
    }
    if(!host){scene.remove();playButton.remove();fallback?.mount(null,options);return;}
-   host.dataset.targetGrowth=target.growth.toFixed(4);host.dataset.targetSpeed=target.speed.toFixed(4);host.dataset.targetLight=target.light.toFixed(4);
+   host.dataset.targetGrowth=target.growth.toFixed(4);host.dataset.targetSpeed=target.speed.toFixed(4);host.dataset.targetLight=target.light.toFixed(4);host.dataset.targetRadiance=target.radiance.toFixed(4);
    if(failed){host.dataset.renderer='canvas';fallback.mount(host,options);return;}
    host.dataset.renderer='reference';
    if(!initialized){current={...target};initialized=true;}
@@ -116,7 +124,7 @@ export function ribbonPoint(strand,u,time){
 function createFilamentRenderer(){
  const canvas=document.createElement('canvas');canvas.className='living-flame-canvas';canvas.setAttribute('aria-hidden','true');
  const ctx=canvas.getContext('2d',{alpha:false});
- let host=null,frame=0,last=0,time=0,target=.32,growth=.32,speed=.7,light=.62,targetSpeed=.7,targetLight=.62,quality=1,slow=0,visible=true,pulse=0,day=null;
+ let host=null,frame=0,last=0,time=0,target=.32,growth=.32,speed=.7,light=.62,radiance=0,targetSpeed=.7,targetLight=.62,targetRadiance=0,quality=1,slow=0,visible=true,pulse=0,day=null;
  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
  const observer=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{for(const entry of entries)if(entry.target===host){visible=entry.isIntersecting;if(visible)schedule();else stop();}}):null;
  // Reuse the sampled mesh; drawing the membranes and their edges shares geometry.
@@ -132,11 +140,11 @@ function createFilamentRenderer(){
   frame=0;if(!ctx||!host?.isConnected||!visible||document.hidden)return;
   const elapsed=last?clamp((now-last)/1000,0,.06):1/60;last=now;
   if(elapsed>.045){if(++slow>16){quality=Math.max(.65,quality-.12);slow=0;}}else slow=Math.max(0,slow-1);
-  if(reduced.matches){growth=target;speed=targetSpeed;light=targetLight;time=2.4;pulse=0;}else{const ease=1-Math.exp(-elapsed*3);growth+=(target-growth)*ease;speed+=(targetSpeed-speed)*ease;light+=(targetLight-light)*ease;time+=elapsed*speed;pulse*=Math.exp(-elapsed*1.8);}
+  if(reduced.matches){growth=target;speed=targetSpeed;light=targetLight;radiance=targetRadiance;time=2.4;pulse=0;}else{const ease=1-Math.exp(-elapsed*3);growth+=(target-growth)*ease;speed+=(targetSpeed-speed)*ease;light+=(targetLight-light)*ease;radiance+=(targetRadiance-radiance)*ease;time+=elapsed*speed;pulse*=Math.exp(-elapsed*1.8);}
   const rect=host.getBoundingClientRect();if(!rect.width||!rect.height){last=0;return;}
   const dpr=Math.min(devicePixelRatio||1,1.5)*quality,w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));
   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
-  host.dataset.growth=growth.toFixed(4);host.dataset.speed=speed.toFixed(4);host.dataset.light=light.toFixed(4);host.dataset.frame=String(Math.round(time*1000));
+  host.dataset.growth=growth.toFixed(4);host.dataset.speed=speed.toFixed(4);host.dataset.light=light.toFixed(4);host.dataset.radiance=radiance.toFixed(4);host.dataset.frame=String(Math.round(time*1000));
   ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='#030717';ctx.fillRect(0,0,w,h);
   const center=w*.5,base=h*.93,height=h*.85*growth,width=w*(.08+.42*growth),brightness=Math.min(1,.35+light*.35+pulse*.25);
   const segments=quality<.8?40:64,stride=quality<.8?2:1;
@@ -155,6 +163,7 @@ function createFilamentRenderer(){
   const tint=(strand)=>Math.sin(strand*.47+.5)>.28?'255,103,42':'40,163,255';
   ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.lineJoin='round';
   glow(center,base-height*.46,height*.68,'12,64,171',.13*brightness);
+  if(radiance>.001){glow(center-width*.12,base-height*.5,height*.6,'28,200,255',radiance*.17);glow(center+width*.14,base-height*.44,height*.55,'255,105,35',radiance*.14);}
   // The soft body is a stack of translucent, folding membranes, rather than
   // an opaque flame silhouette. Its warm/cool layers meet at bright caustics.
   for(let strand=0;strand<STRANDS-2;strand+=stride){
@@ -202,11 +211,11 @@ function createFilamentRenderer(){
  const resize=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>schedule()):null;
  return {
   mount(next,options={}){
-   const dynamics=flameDynamics(options.completed),nextTarget=dynamics.growth,sameDay=day!==null&&options.day===day;
+   const dynamics=flameDynamics(options.completed,options.total),nextTarget=dynamics.growth,sameDay=day!==null&&options.day===day;
    if(next&&sameDay&&nextTarget>target&&!reduced.matches)pulse=Math.min(1,pulse+.65);
    if(!next||options.day!==day)pulse=0;day=options.day;target=nextTarget;
    if(host!==next){if(host){observer?.unobserve(host);resize?.unobserve(host);}stop();host=next;visible=true;if(host){host.append(canvas);observer?.observe(host);resize?.observe(host);}}
-   targetSpeed=dynamics.speed;targetLight=dynamics.light;
+   targetSpeed=dynamics.speed;targetLight=dynamics.light;targetRadiance=dynamics.radiance;
    if(host){host.dataset.targetGrowth=target.toFixed(4);if(!ctx)host.textContent='🔥';schedule();}
   },
   destroy(){stop();observer?.disconnect();resize?.disconnect();document.removeEventListener('visibilitychange',onVisibility);reduced.removeEventListener('change',onReduced);canvas.remove();host=null;}

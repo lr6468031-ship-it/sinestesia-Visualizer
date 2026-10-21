@@ -43,3 +43,10 @@
 .living-flame-scene [hidden],.flame-play-button[hidden]{display:none!important}
 .flame-play-button{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);border:1px solid #aacbe766;border-radius:20px;padding:7px 10px;white-space:nowrap;font:inherit;font-size:9px;background:#0b1730e8;color:#e8f7ff;cursor:pointer}
 .flame-play-button:focus-visible{outline:2px solid #8aeaff;outline-offset:3px}
+
+/* A steady luminous aura builds above the midpoint and peaks with a full plan. */
+.living-flame-radiance{position:absolute;inset:8% 15% 6%;opacity:0;mix-blend-mode:screen;background:radial-gradient(ellipse at 35% 53%,#21dfff99,transparent 57%),radial-gradient(ellipse at 66% 60%,#ff6a3399,transparent 53%);animation:flame-radiance-drift 2s ease-in-out infinite alternate;pointer-events:none}
+.living-flame-scene[data-radiant="false"] .living-flame-radiance{animation:none}
+.living-flame-scene[data-animating="false"] .living-flame-radiance{animation-play-state:paused}
+@keyframes flame-radiance-drift{from{transform:translate(-2%,2%) scale(.97)}to{transform:translate(3%,-3%) scale(1.04)}}
+@media(prefers-reduced-motion:reduce){.living-flame-radiance{animation:none}}
