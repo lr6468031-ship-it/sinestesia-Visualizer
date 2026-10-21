@@ -12,3 +12,7 @@ Proyecto de vida es una aplicación independiente que reutiliza funciones concre
 Las licencias completas se encuentran en `vendor/*-LICENSE.txt`. Por incorporar código AGPL, la aplicación independiente de esta carpeta se ofrece bajo AGPL v3 (archivo `LICENSE`) y su código fuente completo se ofrece desde el diálogo «Acerca del proyecto».
 
 El diseño, los flujos de interfaz, el almacenamiento, la validación de respaldos, la planificación por prioridad y las pruebas de esta aplicación son código nuevo. No se incluye inteligencia artificial ni se requieren claves de API. La sugerencia de prioridades usa prioridad, antigüedad y un presupuesto de tiempo explícito.
+
+## Referencia visual de la llama
+
+`assets/life-flame-loop.mp4` y `assets/life-flame-poster.webp` se adaptan del video `XRecorder_20261021_01.mp4` proporcionado por el usuario para reproducir ese movimiento en esta aplicación. El material visual no se presenta como una simulación original. La adaptación elimina audio y controles, recorta el encuadre y prepara un bucle. El código que controla el tamaño, la velocidad, el brillo y el uso sin conexión es propio de esta aplicación. Véase `assets/README.md` para los detalles del recorte.

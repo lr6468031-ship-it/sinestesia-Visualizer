@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Original Canvas 2D renderer: coherent rising folds and translucent light sheets.
+// Reference motion with task-driven size, playback speed and light. Canvas fallback below.
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const STRANDS=24,TAU=Math.PI*2;
 const smooth=value=>value*value*value*(value*(value*6-15)+10);
@@ -13,6 +13,91 @@ function noise(x,y){
 export function flameGrowth(completed){
  const count=Number.isFinite(completed)?Math.max(0,completed):0;
  return .32+.68*(1-Math.exp(-count/5));
+}
+export function flameDynamics(completed){
+ const count=Number.isFinite(completed)?Math.max(0,completed):0,energy=1-Math.exp(-count/6);
+ return {growth:flameGrowth(count),speed:.7+1.8*energy,light:.62+1.18*energy};
+}
+export function createFlameRenderer(){
+ const scene=document.createElement('div');scene.className='living-flame-scene';scene.setAttribute('aria-hidden','true');
+ const video=document.createElement('video');video.className='living-flame-video';
+ video.muted=true;video.defaultMuted=true;video.loop=true;video.playsInline=true;video.preload='none';video.tabIndex=-1;
+ video.setAttribute('muted','');video.setAttribute('playsinline','');video.setAttribute('disablepictureinpicture','');video.setAttribute('disableremoteplayback','');
+ const poster=document.createElement('img');poster.className='living-flame-poster';poster.alt='';
+ poster.src=new URL('./assets/life-flame-poster.webp',import.meta.url).href;poster.decoding='async';
+ scene.append(poster,video);video.hidden=true;
+ const playButton=document.createElement('button');playButton.className='flame-play-button';playButton.type='button';playButton.textContent='▶ Animar llama';playButton.hidden=true;
+ const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+ let host=null,visible=true,frame=0,last=0,pendingPlay=false,blocked=false,failed=false,destroyed=false,initialized=false,fallback=null,options={};
+ let target=flameDynamics(0),current={...target};
+ const observer=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{
+  for(const entry of entries)if(entry.target===host){visible=entry.isIntersecting;refresh();}
+ }):null;
+ const canAnimate=()=>!destroyed&&!failed&&host?.isConnected&&visible&&!document.hidden&&!reduced.matches;
+ function stop(){if(frame)cancelAnimationFrame(frame);frame=0;last=0;}
+ function paint(){
+  if(!host)return;
+  scene.style.transform=`scale(${current.growth.toFixed(4)})`;
+  scene.style.filter=`brightness(${current.light.toFixed(4)})`;
+  if(Math.abs(video.playbackRate-current.speed)>.005)video.playbackRate=current.speed;
+  host.dataset.growth=current.growth.toFixed(4);host.dataset.speed=current.speed.toFixed(4);host.dataset.light=current.light.toFixed(4);
+  host.dataset.frame=String(Math.round(video.currentTime*1000));
+ }
+ function schedule(){if(!frame&&canAnimate())frame=requestAnimationFrame(update);}
+ function update(now){
+  frame=0;if(!canAnimate()){refresh();return;}
+  const dt=last?Math.min(.06,(now-last)/1000):1/60;last=now;const ease=1-Math.exp(-dt*3);
+  for(const key of ['growth','speed','light'])current[key]+=(target[key]-current[key])*ease;
+  paint();
+  // Video decoding supplies the motion; JS only eases task-driven parameters.
+  if(!video.paused||Object.keys(target).some(key=>Math.abs(target[key]-current[key])>.0001))schedule();
+ }
+ function refresh(){
+  if(destroyed||failed)return;
+  const ready=video.readyState>=2&&!reduced.matches;
+  video.hidden=!ready;poster.hidden=ready;
+  if(!canAnimate()){
+   video.pause();stop();playButton.hidden=true;
+   if(reduced.matches){current={...target};paint();}
+   return;
+  }
+  if(!video.src){video.src=new URL('./assets/life-flame-loop.mp4',import.meta.url).href;video.preload='auto';video.load();}
+  if(video.paused&&!pendingPlay&&!blocked){
+   pendingPlay=true;
+   video.play().then(()=>{if(!canAnimate())video.pause();else{playButton.hidden=true;schedule();}}).catch(error=>{
+    if(error.name!=='AbortError'&&canAnimate()){blocked=true;playButton.hidden=false;}
+   }).finally(()=>{pendingPlay=false;if(canAnimate()&&video.paused&&!blocked)refresh();});
+  }
+  playButton.hidden=!blocked;schedule();
+ }
+ function fail(){
+  if(destroyed||failed)return;failed=true;video.pause();stop();scene.remove();playButton.remove();
+  if(host)observer?.unobserve(host);
+  fallback=createFilamentRenderer();if(host){host.dataset.renderer='canvas';fallback.mount(host,options);}
+ }
+ const onLoaded=()=>refresh(),onPlay=()=>schedule(),onPreference=()=>{blocked=false;refresh();};
+ const onManualPlay=()=>{blocked=false;refresh();};playButton.addEventListener('click',onManualPlay);
+ video.addEventListener('loadeddata',onLoaded);video.addEventListener('playing',onPlay);video.addEventListener('error',fail);
+ document.addEventListener('visibilitychange',refresh);reduced.addEventListener('change',onPreference);
+ return {
+  mount(next,nextOptions={}){
+   options=nextOptions;target=flameDynamics(options.completed);
+   if(host!==next){if(host)observer?.unobserve(host);video.pause();stop();host=next;visible=true;
+    if(host&&!failed){host.append(scene,playButton);observer?.observe(host);}
+   }
+   if(!host){scene.remove();playButton.remove();fallback?.mount(null,options);return;}
+   host.dataset.targetGrowth=target.growth.toFixed(4);host.dataset.targetSpeed=target.speed.toFixed(4);host.dataset.targetLight=target.light.toFixed(4);
+   if(failed){host.dataset.renderer='canvas';fallback.mount(host,options);return;}
+   host.dataset.renderer='reference';
+   if(!initialized){current={...target};initialized=true;}
+   paint();refresh();
+  },
+  destroy(){
+   destroyed=true;stop();observer?.disconnect();video.removeEventListener('error',fail);video.pause();video.removeAttribute('src');video.load();
+   video.removeEventListener('loadeddata',onLoaded);video.removeEventListener('playing',onPlay);playButton.removeEventListener('click',onManualPlay);
+   document.removeEventListener('visibilitychange',refresh);reduced.removeEventListener('change',onPreference);scene.remove();playButton.remove();fallback?.destroy();host=null;
+  }
+ };
 }
 export function ribbonPoint(strand,u,time){
  u=clamp(u,0,1);
@@ -28,10 +113,10 @@ export function ribbonPoint(strand,u,time){
  const detail=noise(side*2.1+12,u*9-time*1.35)*.012*envelope;
  return {x:center+side*radius+fold+detail,y:u};
 }
-export function createFlameRenderer(){
+function createFilamentRenderer(){
  const canvas=document.createElement('canvas');canvas.className='living-flame-canvas';canvas.setAttribute('aria-hidden','true');
  const ctx=canvas.getContext('2d',{alpha:false});
- let host=null,frame=0,last=0,time=0,target=.32,growth=.32,intensity=.4,quality=1,slow=0,visible=true,pulse=0,day=null;
+ let host=null,frame=0,last=0,time=0,target=.32,growth=.32,speed=.7,light=.62,targetSpeed=.7,targetLight=.62,quality=1,slow=0,visible=true,pulse=0,day=null;
  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
  const observer=typeof IntersectionObserver!=='undefined'?new IntersectionObserver(entries=>{for(const entry of entries)if(entry.target===host){visible=entry.isIntersecting;if(visible)schedule();else stop();}}):null;
  // Reuse the sampled mesh; drawing the membranes and their edges shares geometry.
@@ -47,13 +132,13 @@ export function createFlameRenderer(){
   frame=0;if(!ctx||!host?.isConnected||!visible||document.hidden)return;
   const elapsed=last?clamp((now-last)/1000,0,.06):1/60;last=now;
   if(elapsed>.045){if(++slow>16){quality=Math.max(.65,quality-.12);slow=0;}}else slow=Math.max(0,slow-1);
-  if(reduced.matches){growth=target;time=2.4;pulse=0;}else{time+=elapsed;growth+=(target-growth)*(1-Math.exp(-elapsed*3));pulse*=Math.exp(-elapsed*1.8);}
+  if(reduced.matches){growth=target;speed=targetSpeed;light=targetLight;time=2.4;pulse=0;}else{const ease=1-Math.exp(-elapsed*3);growth+=(target-growth)*ease;speed+=(targetSpeed-speed)*ease;light+=(targetLight-light)*ease;time+=elapsed*speed;pulse*=Math.exp(-elapsed*1.8);}
   const rect=host.getBoundingClientRect();if(!rect.width||!rect.height){last=0;return;}
   const dpr=Math.min(devicePixelRatio||1,1.5)*quality,w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));
   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
-  host.dataset.growth=growth.toFixed(4);host.dataset.frame=String(Math.round(time*1000));
+  host.dataset.growth=growth.toFixed(4);host.dataset.speed=speed.toFixed(4);host.dataset.light=light.toFixed(4);host.dataset.frame=String(Math.round(time*1000));
   ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='#030717';ctx.fillRect(0,0,w,h);
-  const center=w*.5,base=h*.93,height=h*.85*growth,width=w*(.08+.42*growth),brightness=Math.min(1,.72+intensity*.18+pulse*.25);
+  const center=w*.5,base=h*.93,height=h*.85*growth,width=w*(.08+.42*growth),brightness=Math.min(1,.35+light*.35+pulse*.25);
   const segments=quality<.8?40:64,stride=quality<.8?2:1;
   const point=(strand,u)=>{
    const p=ribbonPoint(strand,u,time),depth=Math.sin(strand*1.7)*.5+.5;
@@ -117,11 +202,11 @@ export function createFlameRenderer(){
  const resize=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>schedule()):null;
  return {
   mount(next,options={}){
-   const nextTarget=flameGrowth(options.completed||0),sameDay=day!==null&&options.day===day;
+   const dynamics=flameDynamics(options.completed),nextTarget=dynamics.growth,sameDay=day!==null&&options.day===day;
    if(next&&sameDay&&nextTarget>target&&!reduced.matches)pulse=Math.min(1,pulse+.65);
    if(!next||options.day!==day)pulse=0;day=options.day;target=nextTarget;
    if(host!==next){if(host){observer?.unobserve(host);resize?.unobserve(host);}stop();host=next;visible=true;if(host){host.append(canvas);observer?.observe(host);resize?.observe(host);}}
-   intensity=clamp(Number(options.intensity)||0,0,1);
+   targetSpeed=dynamics.speed;targetLight=dynamics.light;
    if(host){host.dataset.targetGrowth=target.toFixed(4);if(!ctx)host.textContent='🔥';schedule();}
   },
   destroy(){stop();observer?.disconnect();resize?.disconnect();document.removeEventListener('visibilitychange',onVisibility);reduced.removeEventListener('change',onReduced);canvas.remove();host=null;}
