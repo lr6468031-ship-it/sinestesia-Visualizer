@@ -13,6 +13,18 @@ node --test proyecto-de-vida/tests/*.test.mjs
 
 Abrir `/proyecto-de-vida/` en el navegador. Para el uso sin conexión se necesita HTTPS o localhost y una primera carga conectada. `npm run build:web` del repositorio incluye esta aplicación en `dist/proyecto-de-vida/`.
 
+## Descargar la versión actualizada
+
+La actualización **1.1.3 de prueba** se genera en GitHub Actions mediante
+**Build Proyecto de vida actualizado**, rama `fix/flama-habitos-y-tareas`.
+Su artefacto se llama `proyecto-de-vida-1.1.3-prueba`. La publicación firmada
+original de `downloads/proyecto-de-vida.apk` sigue siendo 1.1.0.
+
+La prueba se instala aparte, como **Proyecto de vida 1.1.3 · Prueba**, y conserva
+la aplicación original en el teléfono. Para llevar los registros: exportar un
+respaldo desde la original e importarlo en la prueba. Detalles y compilación en
+[Android](android/README.md).
+
 ## Versión Android
 
 El APK independiente incluye todos los archivos para funcionar sin conexión desde el primer inicio. Compilación, firma, instalación y traslado de datos de la web: [android/README.md](android/README.md). Se instala como **Proyecto de vida** (`com.proyectodevida.app`).

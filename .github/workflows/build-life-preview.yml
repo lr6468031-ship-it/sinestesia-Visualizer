@@ -1,0 +1,84 @@
+name: Build Proyecto de vida actualizado
+
+on:
+  push:
+    branches: [main, fix/flama-habitos-y-tareas]
+    paths:
+      - 'proyecto-de-vida/**'
+      - 'scripts/build-life-android.mjs'
+      - 'scripts/configure-life-preview.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-life-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: life-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Android SDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Test current Proyecto de vida sources
+        run: node --test proyecto-de-vida/tests/*.test.mjs
+      - name: Generate an independent test app
+        run: |
+          npm run build:life:android
+          node scripts/configure-life-preview.mjs
+      - name: Build signed test APK
+        working-directory: .cache/life-android/android
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --max-workers=2
+      - name: Verify exact version and source, then prepare download
+        id: artifact
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, shutil, subprocess, zipfile
+          root = pathlib.Path('.')
+          version = json.loads((root / 'proyecto-de-vida/android/version.json').read_text())
+          apk = root / '.cache/life-android/android/app/build/outputs/apk/debug/app-debug.apk'
+          tools = pathlib.Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0'
+          subprocess.run([str(tools/'apksigner'), 'verify', str(apk)], check=True)
+          badging = subprocess.check_output([str(tools/'aapt2'), 'dump', 'badging', str(apk)], text=True)
+          assert "package: name='com.proyectodevida.app.preview'" in badging
+          assert f"versionName='{version['name']}'" in badging
+          assert f"versionCode='{version['code']}'" in badging
+          with zipfile.ZipFile(apk) as package:
+              info = json.loads(package.read('assets/public/build-info.json'))
+              assert info['sourceCommit'] == os.environ['GITHUB_SHA']
+              assert info['version'] == version['name']
+              assert info['versionCode'] == version['code']
+              assert info['distribution'] == 'preview'
+          out = root / '.cache/life-artifact'
+          out.mkdir(parents=True, exist_ok=True)
+          target = out / f"proyecto-de-vida-{version['name']}-prueba.apk"
+          shutil.copyfile(apk, target)
+          (out / (target.name + '.sha256')).write_text(hashlib.sha256(target.read_bytes()).hexdigest()+'  '+target.name+'\n')
+          (out / 'version.json').write_text(json.dumps(info, indent=2)+'\n')
+          (out / 'LEEME.txt').write_text('APK actualizado de prueba. Se instala aparte de tu app original. No desinstales la original. Para llevar tus registros: exporta un respaldo en la original e impórtalo en la prueba.\n')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f"name=proyecto-de-vida-{version['name']}-prueba\n")
+          PY
+      - name: Upload updated installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: .cache/life-artifact/
+          if-no-files-found: error
+          retention-days: 30

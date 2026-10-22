@@ -2,6 +2,37 @@
 
 Paquete independiente `com.proyectodevida.app`, versión y código en `version.json`. Usa Capacitor 7 y Android 6.0 o posterior (API 23), con Android System WebView actualizado (Chromium 105 o posterior). Incluye la aplicación, tema, video, módulos adaptados y licencias. No necesita conexión, cuenta ni permisos de almacenamiento general. La navegación web se mantiene disponible por separado.
 
+## Descargar la última versión de prueba
+
+El flujo **Build Proyecto de vida actualizado** compila las fuentes de la rama
+`fix/flama-habitos-y-tareas`, ejecuta las pruebas y publica un artefacto llamado
+`proyecto-de-vida-1.1.3-prueba`. El APK también se ofrece con descarga directa en
+`downloads/proyecto-de-vida-1.1.3-prueba.apk` de esa rama, acompañado por su SHA-256
+y metadatos de versión y revisión.
+
+Se instala como **Proyecto de vida 1.1.3 · Prueba**, con identificador
+`com.proyectodevida.app.preview`. Tiene las funciones de la última versión y
+se instala aparte de la aplicación original, porque en este entorno no está la
+clave original de publicación. No desinstalar la original. Para copiar los datos,
+exportar un respaldo desde la original e importarlo en la versión de prueba.
+
+Para reproducir el paquete de prueba:
+
+```sh
+npm ci
+node --test proyecto-de-vida/tests/*.test.mjs
+npm run build:life:android
+node scripts/configure-life-preview.mjs
+cd .cache/life-android/android
+./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --max-workers=2
+```
+
+El empaquetado de prueba modifica solo el proyecto generado en `.cache/`. Mantiene
+la implementación de Java y usa un identificador, etiqueta y proveedor de archivos
+propios. El APK debug queda firmado para instalación; no requiere la clave privada
+de la publicación original. `build-info.json` dentro del APK identifica exactamente
+qué revisión y versión se compilaron.
+
 ## Actualización 1.1.3 en preparación
 
 Las fuentes actuales usan `versionCode` 5. La flama, el plan y la gráfica comparten
