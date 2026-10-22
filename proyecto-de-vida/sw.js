@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-const CACHE='proyecto-de-vida-v1-daily-plan';
+const CACHE='proyecto-de-vida-v1-habit-periods';
 const ASSETS=['./','index.html','styles.css','flame-theme.css','planning.css','planning.mjs','reminders.mjs','app.mjs','core.mjs','life-flame.mjs','assets/life-flame-loop.mp4','assets/life-flame-poster.webp','icon.svg','icon-192.png','icon-512.png','manifest.webmanifest','vendor/lifeos.mjs','vendor/neohabit.mjs','vendor/super-productivity.mjs','vendor/beaverhabits.mjs'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS.map(path=>new Request(new URL(path,self.registration.scope),{cache:'reload'})))));self.skipWaiting();});
 self.addEventListener('activate',event=>{

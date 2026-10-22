@@ -46,6 +46,27 @@ Esta aplicación adapta herramientas específicas de cuatro repositorios. No es 
 El código de `proyecto-de-vida/` se distribuye bajo GNU AGPL versión 3. Se incluyen las licencias originales de las adaptaciones. Esta licencia corresponde a esta aplicación independiente; no cambia la licencia del visualizador que la aloja en otra ruta. Código fuente completo disponible en:
 https://github.com/lr6468031-ship-it/sinestesia-Visualizer/tree/main/proyecto-de-vida
 
+## Plazo y avance de los hábitos
+
+Las metas o tareas del día se cumplen en una fecha concreta. Un hábito tiene un
+objetivo por día programado y puede repetirse durante un plazo elegido en días o
+semanas, con inicio y fin inclusivos. Por ejemplo, diez días desde el 1 terminan
+el 10. Solo los días de práctica seleccionados cuentan en el total; los días de
+descanso quedan fuera.
+
+Cada hábito muestra por separado su objetivo de hoy y su avance acumulado:
+días cumplidos, total programado, porcentaje alcanzado y cuánto falta. Los días
+futuros no se cuentan como cumplidos. Una cantidad parcial no completa el día,
+y superar el objetivo no lo cuenta dos veces. Un día de diez cumplido equivale
+al 10% del hábito, mientras dos tareas del día y ese hábito cumplidos pueden
+llevar la flama al 100% del día.
+
+El plazo debe incluir las fechas con registros al editarlo. Los hábitos antiguos
+sin fin siguen funcionando; pueden recibir un plazo al editarlos. Los nuevos
+campos son opcionales en el respaldo de versión 1. Los días y objetivos anteriores
+se conservan en el historial. Al terminar el plazo el hábito deja de entrar en los
+planes diarios posteriores y sigue visible con su avance en Hábitos.
+
 ## Orden del día
 
 En Hoy, **Tareas del día** aparece encima de **Plan del día**. La primera sección

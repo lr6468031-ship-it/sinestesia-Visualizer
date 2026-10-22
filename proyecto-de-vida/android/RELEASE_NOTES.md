@@ -2,12 +2,13 @@
 
 Paquete independiente `com.proyectodevida.app`, versión y código en `version.json`. Usa Capacitor 7 y Android 6.0 o posterior (API 23), con Android System WebView actualizado (Chromium 105 o posterior). Incluye la aplicación, tema, video, módulos adaptados y licencias. No necesita conexión, cuenta ni permisos de almacenamiento general. La navegación web se mantiene disponible por separado.
 
-## Actualización 1.1.2 en preparación
+## Actualización 1.1.3 en preparación
 
-Las fuentes actuales usan `versionCode` 4. La flama, el plan y la gráfica comparten
+Las fuentes actuales usan `versionCode` 5. La flama, el plan y la gráfica comparten
 el cumplimiento de tareas y hábitos de la fecha seleccionada. Tareas del día
-aparece encima de Plan del día. La publicación 1.1.0 citada a continuación es la anterior; no contiene
-esta corrección. Para publicar 1.1.2, compilar y firmar con la clave original,
+aparece encima de Plan del día. Los hábitos permiten plazos en días o semanas y
+muestran su avance acumulado aparte del porcentaje diario de la flama. La publicación 1.1.0 citada a continuación es la anterior; no contiene
+esta corrección. Para publicar 1.1.3, compilar y firmar con la clave original,
 comprobar el certificado y actualizar los metadatos y archivos de `downloads/`.
 No sustituir la firma ni desinstalar la aplicación para aplicar la corrección.
 

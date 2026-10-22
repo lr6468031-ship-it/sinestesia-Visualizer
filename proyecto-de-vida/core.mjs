@@ -22,20 +22,34 @@ export const ALL_DAYS=[0,1,2,3,4,5,6];
 export function weekday(day){return (new Date(day+'T12:00:00Z').getUTCDay()+6)%7;}
 function lastSchedule(records,day){return [...records].filter(r=>r.from<=day).sort((a,b)=>a.from.localeCompare(b.from)).at(-1);}
 export function habitScheduled(habit,day){
- if(day<habit.created)return false;
+ if(day<(habit.startDate||habit.created)||habit.endDate&&day>habit.endDate)return false;
  const history=habit.daySchedules||[];
  const record=lastSchedule(history,day);
  return (record?.days||habit.weekDays||ALL_DAYS).includes(weekday(day));
 }
+export function habitPlanEnd(start,count,unit){
+ if(!validDate(start)||!Number.isInteger(count)||count<1||!['days','weeks'].includes(unit))return null;
+ const days=count*(unit==='weeks'?7:1);if(days>36600)return null;
+ try{const end=shiftDay(start,days-1);return validDate(end)?end:null;}catch{return null;}
+}
+export function habitPlanProgress(habit,asOf=today()){
+ const start=habit.startDate||habit.created,end=habit.endDate||asOf;
+ let completed=0,total=0;
+ for(let day=start,i=0;day<=end&&i<36600;day=shiftDay(day,1),i++){
+  if(!habitScheduled(habit,day))continue;
+  total++;if(day<=asOf&&habitDone(habit,day))completed++;
+ }
+ return {completed,total,remaining:total-completed,ratio:total?completed/total:0};
+}
 export function setHabitDays(habit,from,days){
- if(!habit.daySchedules?.length)habit.daySchedules=[{from:habit.created,days:[...(habit.weekDays||ALL_DAYS)]}];
+ if(!habit.daySchedules?.length)habit.daySchedules=[{from:habit.startDate||habit.created,days:[...(habit.weekDays||ALL_DAYS)]}];
  habit.daySchedules=habit.daySchedules.filter(r=>r.from!==from);
  habit.daySchedules.push({from,days:[...days]});habit.daySchedules.sort((a,b)=>a.from.localeCompare(b.from));
  habit.weekDays=[...days];
 }
 export function streak(habit,day){
  let count=0;
- for(let cursor=day,i=0;i<36600&&cursor>=habit.created;i++,cursor=shiftDay(cursor,-1)){
+ for(let cursor=day,i=0;i<36600&&cursor>=(habit.startDate||habit.created);i++,cursor=shiftDay(cursor,-1)){
   if(!habitScheduled(habit,cursor))continue;
   if(habitDone(habit,cursor)){count++;continue;}
   if(cursor!==day)break;
@@ -131,7 +145,7 @@ export function activitySummary(state,start,end){
 export function dayScore(state,day){return dayProgress(state,day).ratio;}
 export function dayHasPlan(state,day){return dayProgress(state,day).total>0;}
 export function activityStreak(state,day){
- const starts=[...state.tasks.flatMap(t=>[t.created,t.date,...Object.keys(t.occurrences||{})]),...state.habits.map(h=>h.created)];if(!starts.length)return 0;
+ const starts=[...state.tasks.flatMap(t=>[t.created,t.date,...Object.keys(t.occurrences||{})]),...state.habits.map(h=>h.startDate||h.created)];if(!starts.length)return 0;
  const first=starts.sort()[0];let count=0;
  for(let cursor=day,i=0;cursor>=first&&i<36600;cursor=shiftDay(cursor,-1),i++){
   const done=state.habits.some(h=>habitDone(h,cursor))||taskOccurrences(state,cursor,cursor).some(t=>t.status==='done');
@@ -214,6 +228,15 @@ export function validateBackup(raw){
   const result={id:id(h.id),title:title(h.title),area:area(h.area),unit:str(h.unit,30),target:num(h.target,1),step:num(h.step,1),created:date(h.created),targets:arr(h.targets).map(t=>({from:date(t.from),value:num(t.value,1)})),logs};
   if(h.weekDays!==undefined){result.weekDays=days(h.weekDays);if(!result.weekDays.length)bad();}
   if(h.daySchedules!==undefined)result.daySchedules=arr(h.daySchedules).map(r=>{const d=days(r.days);if(!d.length)bad();return {from:date(r.from),days:d};});
+  if(h.startDate!==undefined)result.startDate=date(h.startDate);
+  if(h.endDate!==undefined)result.endDate=h.endDate?date(h.endDate):'';
+  const start=result.startDate||result.created;
+  if(result.endDate&&(result.endDate<start||Date.parse(result.endDate+'T12:00:00Z')-Date.parse(start+'T12:00:00Z')>=36600*86400000))bad();
+  if(h.durationUnit!==undefined){
+   if(!['days','weeks','open'].includes(h.durationUnit))bad();result.durationUnit=h.durationUnit;
+   if(h.durationUnit==='open'){if(result.endDate)bad();}
+   else{result.durationCount=num(h.durationCount,1,36600);if(!Number.isInteger(result.durationCount)||habitPlanEnd(start,result.durationCount,h.durationUnit)!==result.endDate)bad();}
+  }
   return result;
  });
  out.journal=arr(raw.journal).map(j=>({day:date(j.day),mood:num(j.mood,1,5),energy:num(j.energy,1,5),wins:str(j.wins,5000),notes:str(j.notes,5000)}));
