@@ -15,6 +15,10 @@ Abrir `/proyecto-de-vida/` en el navegador. Para el uso sin conexión se necesit
 
 ## Descargar la versión actualizada
 
+[Descargar Proyecto de vida 1.1.3 · Prueba (APK)](https://github.com/lr6468031-ship-it/sinestesia-Visualizer/raw/refs/heads/fix/flama-habitos-y-tareas/downloads/proyecto-de-vida-1.1.3-prueba.apk)
+
+[Ver la ejecución y sus artefactos](https://github.com/lr6468031-ship-it/sinestesia-Visualizer/actions/runs/39848520030)
+
 La actualización **1.1.3 de prueba** se genera en GitHub Actions mediante
 **Build Proyecto de vida actualizado**, rama `fix/flama-habitos-y-tareas`.
 Su artefacto se llama `proyecto-de-vida-1.1.3-prueba`. La publicación firmada

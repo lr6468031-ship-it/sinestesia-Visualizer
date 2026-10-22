@@ -4,6 +4,10 @@ Paquete independiente `com.proyectodevida.app`, versión y código en `version.j
 
 ## Descargar la última versión de prueba
 
+[Descargar Proyecto de vida 1.1.3 · Prueba (APK)](https://github.com/lr6468031-ship-it/sinestesia-Visualizer/raw/refs/heads/fix/flama-habitos-y-tareas/downloads/proyecto-de-vida-1.1.3-prueba.apk)
+
+[Ver la ejecución y sus artefactos](https://github.com/lr6468031-ship-it/sinestesia-Visualizer/actions/runs/39848520030)
+
 El flujo **Build Proyecto de vida actualizado** compila las fuentes de la rama
 `fix/flama-habitos-y-tareas`, ejecuta las pruebas y publica un artefacto llamado
 `proyecto-de-vida-1.1.3-prueba`. El APK también se ofrece con descarga directa en
