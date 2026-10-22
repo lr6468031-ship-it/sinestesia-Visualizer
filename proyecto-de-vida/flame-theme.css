@@ -145,3 +145,6 @@ dialog::backdrop{background:#020611b8;backdrop-filter:blur(6px)}
 #toast{background:#132d43;color:var(--ice);border:1px solid #477e9a;box-shadow:0 8px 30px #00000070}
 @media(max-width:620px){.sidebar{background:#080f20f5;border-top-color:#35506e}.flame-copy>small{font-size:9px}.flame-copy .eyebrow{font-size:8px}nav a{font-size:9px}.duration-slider input{accent-color:var(--cyan)}.completion-chart text{font-size:20px}.completion-legend{font-size:10px}}
 @media print{:root{color-scheme:light;--bg:#fff;--card:#fff;--ink:#142134;--muted:#43536b;--subtle:#43536b;--line:#ccd3de}body,.flame-card,.focus-card{background:#fff}.card,.stat{box-shadow:none}.flame-mount{display:none}}
+
+/* The selected date drives both the daily list and the plan below it. */
+.day-tasks .day-picker{margin:0;flex-wrap:wrap}.day-tasks .metrics-note{margin-bottom:16px}.day-plan .week{margin-bottom:18px}.day-completion{color:var(--ink);font-size:13px;line-height:1.7;margin:14px 0 8px}.day-completion b{color:var(--cyan,#72e5ff)}.day-plan>.section-head:not(:first-child){margin-top:22px}.overdue-tasks summary{cursor:pointer;color:var(--ink);font-size:14px}.overdue-tasks .subcopy{margin:14px 0}.day-tasks .section-head{flex-wrap:wrap;gap:12px}

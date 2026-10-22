@@ -112,12 +112,24 @@ export function progress(state,id){
  }
  return goalProgress(items);
 }
-export function dayScore(state,day){
- const habits=state.habits.filter(h=>habitScheduled(h,day)),tasks=taskOccurrences(state,day,day);
- const total=habits.length+tasks.length;
- return total?(habits.filter(h=>habitDone(h,day)).length+tasks.filter(t=>t.status==='done').length)/total:0;
+function activityCounts(completed,pending){
+ const total=completed+pending;
+ return {completed,pending,total,ratio:total?completed/total:0,allCompleted:total>0&&pending===0};
 }
-export function dayHasPlan(state,day){return state.habits.some(h=>habitScheduled(h,day))||taskOccurrences(state,day,day).length>0;}
+export function dayProgress(state,day){
+ const habits=state.habits.filter(h=>habitScheduled(h,day)),tasks=taskOccurrences(state,day,day).filter(t=>t.status!=='deleted');
+ const completed=habits.filter(h=>habitDone(h,day)).length+tasks.filter(t=>t.status==='done').length;
+ return activityCounts(completed,tasks.length+habits.length-completed);
+}
+export function activitySummary(state,start,end){
+ let completed=0,pending=0;
+ for(let day=start,i=0;day<=end&&i<36600;day=shiftDay(day,1),i++){
+  const counts=dayProgress(state,day);completed+=counts.completed;pending+=counts.pending;
+ }
+ return activityCounts(completed,pending);
+}
+export function dayScore(state,day){return dayProgress(state,day).ratio;}
+export function dayHasPlan(state,day){return dayProgress(state,day).total>0;}
 export function activityStreak(state,day){
  const starts=[...state.tasks.flatMap(t=>[t.created,t.date,...Object.keys(t.occurrences||{})]),...state.habits.map(h=>h.created)];if(!starts.length)return 0;
  const first=starts.sort()[0];let count=0;
@@ -145,10 +157,7 @@ export function dueTasks(state,day){
  return items;
 }
 export function flameTaskProgress(state,day){
- const habits=state.habits.filter(habit=>habitScheduled(habit,day));
- const completedHabits=habits.filter(habit=>habitDone(habit,day)).length;
- const completed=completedTasksOn(state,day)+completedHabits,pending=dueTasks(state,day).filter(task=>task.status==='todo').length+habits.length-completedHabits,total=completed+pending;
- return {completed,pending,total,ratio:total?completed/total:0,allCompleted:completed>0&&pending===0};
+ return dayProgress(state,day);
 }
 export function planTasks(state,day){
  const candidates=dueTasks(state,day).filter(t=>t.status==='todo').sort((a,b)=>b.priority-a.priority||a.date.localeCompare(b.date)||a.created.localeCompare(b.created));

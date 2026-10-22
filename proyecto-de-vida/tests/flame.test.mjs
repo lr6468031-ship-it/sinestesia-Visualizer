@@ -8,7 +8,16 @@ test('the midpoint retains the reference appearance and the full plan has visibl
 test('the same completion proportion has the same energy for small and large plans',()=>{assert.deepEqual(flameDynamics(1,2),flameDynamics(10,20));assert.deepEqual(flameDynamics(1,1),flameDynamics(100,100));assert.deepEqual(flameDynamics(0,0),flameDynamics(0,10));assert.equal(flameDynamics(0,0).radiance,0);});
 test('invalid counts and totals cannot trigger maximum energy or break media playback',()=>{for(const count of [NaN,Infinity,-5,undefined])assert.deepEqual(flameDynamics(count,10),flameDynamics(0,10));for(const total of [0,-1,NaN,Infinity,undefined])assert.deepEqual(flameDynamics(2,total),flameDynamics(0,0));const max=flameDynamics(1000000,1);assert.deepEqual(max,flameDynamics(1,1));assert.ok(max.growth<=1&&max.speed<=3.4&&max.light<=2.7&&max.radiance<=1);});
 test('undoing a completion smoothly returns the target from maximum to its previous level',()=>{const s=fresh();s.tasks=[task('one'),task('two')];toggleTask(s,'one','2026-10-19');const one=flameTaskProgress(s,'2026-10-19'),half=flameDynamics(one.completed,one.total);toggleTask(s,'two','2026-10-19');const two=flameTaskProgress(s,'2026-10-19'),full=flameDynamics(two.completed,two.total);assert.ok(full.speed>half.speed&&full.light>half.light);assert.equal(two.allCompleted,true);toggleTask(s,'two','2026-10-19');const undone=flameTaskProgress(s,'2026-10-19');assert.equal(undone.allCompleted,false);assert.deepEqual(flameDynamics(undone.completed,undone.total),half);});
-test('pending, overdue and late-completed tasks share a consistent daily denominator',()=>{const s=fresh(),day='2026-10-21';s.tasks=[task('late',{date:'2026-10-20'}),task('today',{date:day}),task('future',{date:'2026-10-22'})];assert.deepEqual(flameTaskProgress(s,day),{completed:0,pending:2,total:2,ratio:0,allCompleted:false});toggleTask(s,'late','2026-10-20',day);assert.deepEqual(flameTaskProgress(s,day),{completed:1,pending:1,total:2,ratio:.5,allCompleted:false});toggleTask(s,'today',day);assert.deepEqual(flameTaskProgress(s,day),{completed:2,pending:0,total:2,ratio:1,allCompleted:true});});
+test('other dates and late completions never change the selected daily denominator',()=>{
+ const s=fresh(),day='2026-10-21';s.tasks=[task('late',{date:'2026-10-20'}),task('today',{date:day}),task('future',{date:'2026-10-22'})];
+ const pending={completed:0,pending:1,total:1,ratio:0,allCompleted:false};
+ assert.deepEqual(flameTaskProgress(s,day),pending);
+ toggleTask(s,'late','2026-10-20',day);
+ assert.deepEqual(flameTaskProgress(s,day),pending);
+ assert.equal(flameTaskProgress(s,'2026-10-20').ratio,1);
+ toggleTask(s,'today',day);
+ assert.deepEqual(flameTaskProgress(s,day),{completed:1,pending:0,total:1,ratio:1,allCompleted:true});
+});
 test('an empty or entirely deleted plan never counts as fully completed',()=>{const s=fresh();assert.equal(flameTaskProgress(s,'2026-10-19').allCompleted,false);s.tasks=[task('gone')];deleteTask(s,'gone','2026-10-19');assert.deepEqual(flameTaskProgress(s,'2026-10-19'),{completed:0,pending:0,total:0,ratio:0,allCompleted:false});});
 test('deleted tasks do not count as completions or prevent a finished active plan from peaking',()=>{const s=fresh();s.tasks=[task('done'),task('gone')];toggleTask(s,'done','2026-10-19');deleteTask(s,'gone','2026-10-19');assert.deepEqual(flameTaskProgress(s,'2026-10-19'),{completed:1,pending:0,total:1,ratio:1,allCompleted:true});});
 test('recurring tasks and habits both contribute to their scheduled day',()=>{
@@ -57,9 +66,10 @@ test('habit targets, schedule history and logs are evaluated on the selected dat
  assert.equal(flameTaskProgress(s,'2026-10-21').ratio,0);
  assert.equal(flameTaskProgress(s,'2026-10-22').total,0);
 });
-test('mixed plans count overdue tasks and habits without treating deletion as completion',()=>{
+test('overdue tasks remain available without changing a completed daily habit plan',()=>{
  const s=fresh(),day='2026-10-21';s.tasks=[task('late'),task('gone',{date:day})];s.habits=[habit('h',{logs:{[day]:1}})];
  deleteTask(s,'gone',day);
- assert.deepEqual(flameTaskProgress(s,day),{completed:1,pending:1,total:2,ratio:.5,allCompleted:false});
- toggleTask(s,'late','2026-10-19',day);assert.equal(flameTaskProgress(s,day).allCompleted,true);
+ const full={completed:1,pending:0,total:1,ratio:1,allCompleted:true};
+ assert.deepEqual(flameTaskProgress(s,day),full);
+ toggleTask(s,'late','2026-10-19',day);assert.deepEqual(flameTaskProgress(s,day),full);
 });

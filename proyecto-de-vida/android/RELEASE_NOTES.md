@@ -1,42 +1,70 @@
-Proyecto de vida para Android, versión 1.1.1 (código 3).
+# APK de Proyecto de vida
 
-- La intensidad de la llama combina tareas y hábitos programados para el día.
-- Cada hábito aporta una actividad completada al alcanzar su objetivo; superar
-  el objetivo no lo cuenta dos veces.
-- Desmarcar una tarea o bajar un hábito por debajo del objetivo reduce la llama.
-- Los hábitos en descanso no cuentan como pendientes; se respeta el historial
-  de días y objetivos de cada hábito.
-- Los textos de la llama muestran actividades e incluyen tareas y hábitos.
-- Se conserva el diseño oscuro, la animación y los datos de la versión anterior.
+Paquete independiente `com.proyectodevida.app`, versión y código en `version.json`. Usa Capacitor 7 y Android 6.0 o posterior (API 23), con Android System WebView actualizado (Chromium 105 o posterior). Incluye la aplicación, tema, video, módulos adaptados y licencias. No necesita conexión, cuenta ni permisos de almacenamiento general. La navegación web se mantiene disponible por separado.
 
-Para instalar encima de 1.1.0 sin perder datos, el APK debe firmarse con la misma
-clave original. Esta revisión de las fuentes no sustituye la firma y publicación
-del APK. No desinstalar la aplicación para actualizarla.
+## Actualización 1.1.2 en preparación
 
----
+Las fuentes actuales usan `versionCode` 4. La flama, el plan y la gráfica comparten
+el cumplimiento de tareas y hábitos de la fecha seleccionada. Tareas del día
+aparece encima de Plan del día. La publicación 1.1.0 citada a continuación es la anterior; no contiene
+esta corrección. Para publicar 1.1.2, compilar y firmar con la clave original,
+comprobar el certificado y actualizar los metadatos y archivos de `downloads/`.
+No sustituir la firma ni desinstalar la aplicación para aplicar la corrección.
 
-## Notas de la publicación anterior: 1.1.0
+## Instalar y trasladar datos
 
-Proyecto de vida para Android, versión 1.1.0.
+Descargar `proyecto-de-vida.apk` de la publicación `proyecto-de-vida-v1.1.0` del repositorio. Android puede pedir autorización al navegador para instalar aplicaciones descargadas. Abrir el APK y aceptar la instalación.
 
-- Hora de inicio para cada rutina, independiente de su duración.
-- Avisos a la hora elegida o 5, 10, 15, 30 o 60 minutos antes.
-- Notificación con sonido o sonido de alarma, incluso con la pantalla de la aplicación cerrada.
-- Repetición en los días seleccionados y cancelación al completar, eliminar o cambiar la rutina.
-- Recuperación de horarios tras reiniciar, actualizar el APK y cambiar la zona horaria.
-- Calendario mensual con agenda por día y rutinas ordenadas por hora.
-- Fecha de inicio y fin de las metas, con franjas de colores de la llama y días restantes.
-- Colores aleatorios distintos que se conservan entre aperturas y en los respaldos.
-- Tema, llama animada, estadísticas y cronómetros anteriores conservados.
+El navegador y el APK tienen almacenamientos separados. Para trasladar el progreso existente, abrir **Ajustes y respaldo → Descargar mis datos** en la web; después, **Ajustes y respaldo → Importar un respaldo** en el APK y confirmar. El formato JSON y la clave interna se mantienen; no se importan datos automáticamente ni se borran los de la web. Exportar un respaldo antes de desinstalar o borrar datos de Android.
 
-**Actualizar desde 1.0.0:** instala este APK encima del anterior para conservar tus datos. No lo desinstales. El identificador y la firma se mantienen.
+La importación conserva tareas, hábitos, metas, diario y sesiones registradas. No reanuda un cronómetro en curso del respaldo.
 
-**Ejemplo de aviso:** edita Ejercicio → Hora de inicio: 14:00 → Sonido de alarma → A la hora de inicio. Elige sus días y guarda. En Calendario o Ajustes pulsa Activar avisos y, si aparece, Permitir horarios precisos. Android controla el volumen, No molestar y los canales de sonido; puedes revisarlos en Sonido y permisos de Android.
+Para actualizar desde 1.0.0, instalar 1.1.0 encima del APK anterior: usa el mismo identificador y certificado, con código de versión 2. No hace falta desinstalar ni trasladar los datos de nuevo.
 
-**Instalación nueva:** descarga proyecto-de-vida.apk, ábrelo y permite la instalación si Android lo solicita. Requiere Android 6.0 o posterior y Android System WebView actualizado. Para trasladar datos desde la web: Ajustes y respaldo → Descargar mis datos; después, en el APK → Importar un respaldo.
+## Horarios y avisos
 
-El calendario y los datos funcionan sin conexión. En la web los avisos requieren que la página permanezca abierta; el APK usa el programador de Android. El cronómetro mantiene su comportamiento y no añade una alarma de finalización de sesión.
+En la rutina se elige **Hora de inicio**, **Cómo avisarme** y **Cuándo avisarme**. Para ejercicio a las 14:00: elegir `14:00`, **Sonido de alarma** y **A la hora de inicio**. La duración de la actividad sigue controlando únicamente el cronómetro. En Calendario y Ajustes se pueden activar las notificaciones y permitir los horarios precisos. El canal de alarma utiliza el sonido de alarma del teléfono mediante una notificación de prioridad alta; el canal normal usa el sonido de notificación.
 
-Verificaciones: tests de datos y calendario, pruebas de horarios en JVM, tests Android con Robolectric, navegación móvil con Chromium y verificación de firma del APK. No se ha probado en un teléfono físico.
+Se guarda el plan en SharedPreferences privado y se usa una sola alarma del sistema para la próxima hora, aunque haya varias rutinas. El receptor entrega los avisos coincidentes, impide duplicados y vuelve a programar la siguiente fecha. Usa días y horas locales, con ajustes del calendario para el horario de verano, sin repetir cada 24 horas en milisegundos. Los receptores recuperan el plan al reiniciar, cambiar fecha/zona horaria y actualizar el APK. Completar o eliminar una ocurrencia cancela ese día; el resto de la repetición se mantiene. Desactivar el recordatorio o detener una serie cancela los avisos correspondientes.
 
-El APK está firmado para instalación directa. proyecto-de-vida.apk.sha256 permite comprobar su integridad. Las fuentes completas de esta versión se incluyen en los archivos de fuentes de la publicación (AGPL-3.0).
+Android 13 o posterior requiere permiso de notificaciones. Android 12 o posterior puede requerir autorización de alarmas exactas; al no tenerla se usa `setAndAllowWhileIdle` y la interfaz informa que Android puede retrasar la hora. No se solicita acceso a calendario, contactos ni archivos generales. La reproducción respeta los canales de notificación, volumen y No molestar del sistema. Detener la aplicación mediante **Forzar detención** impide que Android entregue avisos hasta volver a abrirla.
+
+La exportación del APK abre el selector de archivos de Android (`ACTION_CREATE_DOCUMENT`); permite elegir dónde guardar el JSON y no solicita acceso a todos los archivos. Cancelar no muestra una confirmación falsa de guardado. La importación usa el selector de archivos existente. El botón Atrás cierra el diálogo, vuelve a Hoy desde otras secciones y minimiza la aplicación desde Hoy.
+
+El cronómetro conserva la hora de finalización: al volver después de suspender o cerrar la aplicación calcula el tiempo real transcurrido y registra la sesión una vez. Los recordatorios de inicio de las rutinas se programan por separado con AlarmManager y pueden avisar con la aplicación cerrada. El cronómetro no añade una alarma de finalización de sesión.
+
+## Compilar
+
+Requiere Node.js 22, Java 21, SDK de Android 35 y build-tools 35.0.0. Desde la raíz del repositorio:
+
+```sh
+npm ci
+node --test proyecto-de-vida/tests/*.test.mjs
+npm run build:life:android
+cd .cache/life-android/android
+./gradlew testDebugUnitTest assembleRelease --no-daemon
+```
+
+El proyecto se genera en `.cache/life-android/`, con configuración propia; el APK sin firmar está en `android/app/build/outputs/apk/release/app-release-unsigned.apk` dentro de esa carpeta. No descarga ni incluye los modelos de audio del visualizador. `build-info.json` dentro de los archivos del APK registra versión y revisión de las fuentes.
+
+Los tests Robolectric ejercitan programación sin Activity ni WebView, reinicio, duplicados, permisos exactos de Android 13, canales de sonido, cancelación y cambios de rutina. `tests/ReminderTimeTest.java` también puede ejecutarse como una prueba JVM independiente para fechas locales, cambio de horario de verano y anticipos que cruzan medianoche. La validación se realiza en JVM y Chromium; no sustituye una prueba en un teléfono físico y sus ajustes de batería.
+
+Firmar con `zipalign` y `apksigner` del SDK. Las contraseñas se leen de archivos privados, sin incluirlas en argumentos ni en el repositorio:
+
+```sh
+cd app/build/outputs/apk/release
+"$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 app-release-unsigned.apk proyecto-de-vida-aligned.apk
+"$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+  --ks "$LIFE_KEYSTORE" --ks-key-alias proyecto-de-vida \
+  --ks-pass "file:$LIFE_STOREPASS_FILE" \
+  --out proyecto-de-vida.apk proyecto-de-vida-aligned.apk
+"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs proyecto-de-vida.apk
+```
+
+La clave de la primera publicación se conserva fuera del repositorio en `/workspace/proyecto-de-vida-private-signing/`. El responsable de las publicaciones debe guardar una copia privada tanto del almacén de claves como de su contraseña. Nunca subirlos al repositorio ni a los artefactos públicos. Las actualizaciones deben usar la misma clave, el mismo identificador y un `versionCode` mayor para conservar los datos al instalar encima.
+
+## Publicar
+
+`downloads/proyecto-de-vida.apk`, su SHA-256 y `downloads/proyecto-de-vida-release.json` contienen el binario firmado, la revisión exacta de las fuentes y el certificado público. El flujo `Publish Proyecto de vida APK` verifica integridad, firma, identidad, versión y procedencia antes de crear una publicación de GitHub con descarga directa. El flujo nunca contiene ni genera la clave privada.
+
+Las fuentes completas, incluida la integración de Android, se encuentran en este repositorio. Se conservan los créditos y las licencias en el APK y la licencia AGPL-3.0 de la aplicación.

@@ -46,13 +46,22 @@ Esta aplicación adapta herramientas específicas de cuatro repositorios. No es 
 El código de `proyecto-de-vida/` se distribuye bajo GNU AGPL versión 3. Se incluyen las licencias originales de las adaptaciones. Esta licencia corresponde a esta aplicación independiente; no cambia la licencia del visualizador que la aloja en otra ruta. Código fuente completo disponible en:
 https://github.com/lr6468031-ship-it/sinestesia-Visualizer/tree/main/proyecto-de-vida
 
+## Orden del día
+
+En Hoy, **Tareas del día** aparece encima de **Plan del día**. La primera sección
+muestra los conteos y la lista de tareas de la fecha elegida, incluidas las
+vinculadas a metas. El plan inferior muestra la semana, el porcentaje compartido
+con la flama y todos los hábitos programados para esa fecha. El selector de fecha
+y los botones de la semana actualizan ambas secciones y la flama a la vez.
+Las tareas de otros días quedan en una sección separada de pendientes.
+
 ## Llama animada
 
 `life-flame.mjs` usa un bucle limpio del video `XRecorder_20261021_01.mp4` aportado por el usuario como referencia. Así conserva las membranas, los colores y los destellos originales. Se recortan los controles de la grabación, se excluyen los momentos con indicadores superpuestos, se elimina el audio y se suaviza la unión del bucle. El clip H.264 de 360 × 636 y su imagen estática se incluyen en `assets/`; no se carga contenido de otros sitios.
 
 La proporción de tareas y hábitos completados en el plan del día controla el tamaño, la velocidad y la luz. Al 0% parte de tamaño 32%, velocidad 0,7× y luz 0,62×; al 50% conserva el aspecto intermedio de referencia (86%, 2× y 1,5×); al 100% alcanza tamaño completo, velocidad 3,4×, luz 2,7× y una aureola luminosa azul y naranja. La aureola aparece de forma gradual por encima del 50%. La última actividad (tarea o hábito) añade un impulso sostenido de velocidad, luz y resplandor para que el 100% se distinga de un plan casi terminado. Los aumentos son continuos y se mantienen, incluso al recargar; desmarcar una tarea o bajar un hábito por debajo de su objetivo reduce suavemente la energía. Tanto 1 de 1 como 10 de 10 actividades alcanzan el máximo.
 
-El plan incluye tareas pendientes del día y atrasadas, junto con las completadas en la fecha elegida (también si se completaron después de su fecha prevista). Cada hábito programado para ese día cuenta como una actividad; se completa al alcanzar su objetivo vigente. Los avances parciales no se cuentan como completados ni se cuentan dos veces al superar el objetivo. Las fechas futuras, tareas eliminadas y hábitos en descanso se excluyen de esta proporción. Un plan vacío conserva la llama inicial y no se considera completado. Las estadísticas generales y las rachas mantienen sus cálculos existentes.
+La llama, el porcentaje del plan y el punto de la gráfica usan el mismo cálculo para la fecha seleccionada: tareas de esa fecha y hábitos programados para ese día. Una tarea vinculada a una meta cuenta una sola vez; la meta no se suma como una segunda actividad. Cada hábito se completa al alcanzar su objetivo vigente; los avances parciales no cuentan como completados ni superar el objetivo lo cuenta dos veces. Las tareas eliminadas y los hábitos en descanso se excluyen del plan activo. Un plan vacío conserva la llama inicial y no se considera completado. Las tareas atrasadas de otras fechas se muestran aparte y no alteran el porcentaje del día elegido, aunque se completen después. El cumplimiento por período suma las mismas actividades de cada fecha.
 
 El mismo elemento de video se conserva al registrar tareas y navegar para evitar reinicios. Se pausa fuera de pantalla, con la pestaña oculta y al navegar a otra sección. Con movimiento reducido se muestra la imagen estática con el tamaño y la luz correspondientes. Si el navegador solicita una interacción para reproducir, aparece «Animar llama»; si no puede cargar el clip, se mantiene un respaldo de filamentos sobre Canvas 2D con los mismos parámetros de progreso.
 
