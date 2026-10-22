@@ -9,6 +9,7 @@ export const AREAS={salud:{name:'Salud',color:'#72e5ff',icon:'heart'},aprendizaj
 export const uid=()=>crypto.randomUUID();
 export function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 export function validDate(s){return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s+'T12:00:00Z'))&&new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s;}
+export function validTime(s){return typeof s==='string'&&/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(s);}
 export function shiftDay(s,n){const d=new Date(s+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
 export function weekStart(day){const d=new Date(day+'T12:00:00Z');return shiftDay(day,-((d.getUTCDay()+6)%7));}
 export function fresh(){return {app:APP,version:1,profile:{name:'',purpose:''},goals:[],tasks:[],habits:[],journal:[],sessions:[],timer:null};}
@@ -179,7 +180,7 @@ export function validateBackup(raw){
  const area=v=>{if(!Object.hasOwn(AREAS,v))bad();return v;};
  const days=v=>{const list=arr(v);if(list.some(d=>!Number.isInteger(d)||d<0||d>6)||new Set(list).size!==list.length)bad();return [...list].sort((a,b)=>a-b);};
  out.profile={name:str(raw.profile?.name,60),purpose:str(raw.profile?.purpose,1000)};
- out.goals=arr(raw.goals).map(g=>({id:id(g.id),title:title(g.title),area:area(g.area),why:str(g.why,1000),deadline:g.deadline?date(g.deadline):'',created:date(g.created)}));
+ out.goals=arr(raw.goals).map(g=>{const result={id:id(g.id),title:title(g.title),area:area(g.area),why:str(g.why,1000),deadline:g.deadline?date(g.deadline):'',created:date(g.created)};if(g.startDate!==undefined){result.startDate=date(g.startDate);if(result.deadline&&result.deadline<result.startDate)bad();}if(g.color!==undefined){if(typeof g.color!=='string'||!/^#[a-fA-F0-9]{6}$/.test(g.color))bad();result.color=g.color.toLowerCase();}return result;});
  out.tasks=arr(raw.tasks).map(t=>{
   if(!['todo','done','deleted'].includes(t.status))bad();
   const occurrences={};
@@ -192,6 +193,9 @@ export function validateBackup(raw){
   if(t.occurrences!==undefined)result.occurrences=occurrences;
   if(t.archivedOn!==undefined)result.archivedOn=t.archivedOn?date(t.archivedOn):'';
   if(t.scheduleHistory!==undefined)result.scheduleHistory=arr(t.scheduleHistory).map(r=>({from:date(r.from),date:date(r.date),days:days(r.days)}));
+  if(t.startTime!==undefined){if(t.startTime!==''&&!validTime(t.startTime))bad();result.startTime=t.startTime;}
+  if(t.reminder!==undefined){if(!['off','notification','alarm'].includes(t.reminder))bad();result.reminder=t.reminder;if(t.reminder!=='off'&&!validTime(t.startTime))bad();}
+  if(t.reminderMinutes!==undefined){if(![0,5,10,15,30,60].includes(t.reminderMinutes))bad();result.reminderMinutes=t.reminderMinutes;}
   return result;
  });
  out.habits=arr(raw.habits).map(h=>{

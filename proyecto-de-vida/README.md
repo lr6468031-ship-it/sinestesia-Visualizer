@@ -17,7 +17,17 @@ Abrir `/proyecto-de-vida/` en el navegador. Para el uso sin conexión se necesit
 
 El APK independiente incluye todos los archivos para funcionar sin conexión desde el primer inicio. Compilación, firma, instalación y traslado de datos de la web: [android/README.md](android/README.md). Se instala como **Proyecto de vida** (`com.proyectodevida.app`).
 
-## Datos
+## Calendario, fechas y recordatorios
+
+La sección **Calendario** muestra un mes de lunes a domingo y la agenda del día elegido. Cada meta tiene fecha de inicio, fecha de fin opcional y un color aleatorio de la paleta de la llama. Los colores son únicos, se favorece la separación visual entre ellos y se guardan con la meta. Las franjas cubren cada día del período, incluidos inicio y fin; la leyenda indica el tiempo restante. Las metas anteriores reciben un color una sola vez. Las fechas sin hora se tratan como días del calendario local, sin convertirlos a UTC.
+
+Cada rutina permite elegir una **hora de inicio** independiente de su duración y un aviso: sin recordatorio, notificación con sonido o sonido de alarma. Se puede avisar a esa hora o 5, 10, 15, 30 o 60 minutos antes. Se respetan los días de repetición, la fecha de inicio, los registros completados y eliminados, y el fin de una serie. Las nuevas opciones se incluyen en los respaldos de versión 1 y los respaldos anteriores siguen siendo compatibles.
+
+En Android los horarios quedan guardados en el dispositivo y se programan con AlarmManager, sin depender del cronómetro ni de JavaScript en segundo plano. Se recuperan tras reiniciar, actualizar la aplicación o cambiar la hora o zona horaria. **Activar avisos** solicita notificaciones en Android 13 o posterior; **Permitir horarios precisos** abre el permiso de alarmas y recordatorios en Android 12 o posterior. Sin ese permiso se usa la programación aproximada de Android y se informa en la interfaz. El modo de alarma usa una notificación con el sonido de alarma del teléfono; los canales se controlan desde **Sonido y permisos de Android**.
+
+La web comprueba avisos mientras permanece abierta y puede mostrar notificaciones si tiene permiso. El APK permite avisos con la pantalla de la aplicación cerrada. Los ajustes de sonido, No molestar, ahorro de energía y el estado de detención forzada de Android siguen bajo el control del usuario y del sistema.
+
+## Datos personales y compatibilidad
 
 Los datos personales permanecen en `localStorage` del dispositivo, bajo `proyecto-de-vida-v1`; no se transmiten a los proyectos de referencia ni a un servidor. No hay cuentas, sincronización remota ni recuperación de contraseña. Exportar un respaldo antes de borrar los datos del navegador. Las importaciones se validan y requieren confirmación antes de reemplazar datos. Antes de importar se conserva adicionalmente una copia local en `proyecto-de-vida-v1-antes-de-importar`.
 

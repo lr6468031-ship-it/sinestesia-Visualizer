@@ -44,12 +44,18 @@ jobs:
           assert f"versionName='{info['version']}'" in badging
           assert f"versionCode='{info['versionCode']}'" in badging
           assert 'application-debuggable' not in badging
+          if info['versionCode'] >= 2:
+              for permission in ('POST_NOTIFICATIONS', 'SCHEDULE_EXACT_ALARM', 'RECEIVE_BOOT_COMPLETED', 'VIBRATE'):
+                  assert 'android.permission.' + permission in badging
+              previous = json.loads(subprocess.check_output(['git', 'show', info['sourceCommit'] + ':downloads/proyecto-de-vida-release.json'], text=True))
+              assert previous['certificateSha256'] == info['certificateSha256']
+              assert previous['versionCode'] < info['versionCode']
           with zipfile.ZipFile(apk) as package:
               build = json.loads(package.read('assets/public/build-info.json'))
               assert build['sourceCommit'] == info['sourceCommit']
               assert build['version'] == info['version']
               assert build['versionCode'] == info['versionCode']
-              for name in ('app.mjs', 'core.mjs', 'life-flame.mjs', 'flame-theme.css', 'native-bridge.js', 'assets/life-flame-loop.mp4', 'LICENSE', 'THIRD_PARTY.md'):
+              for name in ('app.mjs', 'core.mjs', 'life-flame.mjs', 'flame-theme.css', 'planning.css', 'planning.mjs', 'reminders.mjs', 'native-bridge.js', 'assets/life-flame-loop.mp4', 'LICENSE', 'THIRD_PARTY.md'):
                   assert package.getinfo('assets/public/' + name).file_size > 0
           subprocess.run(['git', 'merge-base', '--is-ancestor', info['sourceCommit'], 'HEAD'], check=True)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
@@ -63,11 +69,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           LIFE_TAG: ${{ steps.release.outputs.tag }}
-          LIFE_SOURCE: ${{ steps.release.outputs.source }}
+          LIFE_TARGET: ${{ github.sha }}
           LIFE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           gh release create "$LIFE_TAG" \
-            --target "$LIFE_SOURCE" \
+            --target "$LIFE_TARGET" \
             --title "Proyecto de vida $LIFE_VERSION para Android" \
             --notes-file proyecto-de-vida/android/RELEASE_NOTES.md \
             downloads/proyecto-de-vida.apk \

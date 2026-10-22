@@ -4,6 +4,7 @@ package com.proyectodevida.app;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.content.Intent;
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.view.WindowCompat;
 import com.getcapacitor.BridgeActivity;
@@ -12,7 +13,9 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(LifeBackupPlugin.class);
+        registerPlugin(LifeRemindersPlugin.class);
         super.onCreate(savedInstanceState);
+        rememberRoutine(getIntent());
         int background = Color.rgb(5, 10, 24);
         getWindow().setBackgroundDrawable(new ColorDrawable(background));
         getWindow().setStatusBarColor(background);
@@ -35,4 +38,9 @@ public class MainActivity extends BridgeActivity {
             }
         });
     }
+    private void rememberRoutine(Intent intent){
+        String day=intent==null?null:intent.getStringExtra("routine_day");
+        if(day!=null&&day.matches("\\d{4}-\\d{2}-\\d{2}"))getSharedPreferences("life-reminders",MODE_PRIVATE).edit().putString("openedDay",day).apply();
+    }
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);rememberRoutine(intent);}
 }

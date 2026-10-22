@@ -1,16 +1,23 @@
-Proyecto de vida para Android, versión 1.0.0.
+Proyecto de vida para Android, versión 1.1.0.
 
-- Tema azul oscuro, cian y naranja dorado.
-- Llama animada que aumenta de tamaño, velocidad y luz al completar tareas.
-- Metas, tareas con días de la semana, hábitos, diario y estadísticas.
-- Duración de tareas en horas, minutos y segundos, con cronómetro y pausa.
-- Todos los archivos incluidos para funcionar sin conexión desde el primer inicio.
-- Importación de respaldos JSON y guardado mediante el selector de archivos de Android.
+- Hora de inicio para cada rutina, independiente de su duración.
+- Avisos a la hora elegida o 5, 10, 15, 30 o 60 minutos antes.
+- Notificación con sonido o sonido de alarma, incluso con la pantalla de la aplicación cerrada.
+- Repetición en los días seleccionados y cancelación al completar, eliminar o cambiar la rutina.
+- Recuperación de horarios tras reiniciar, actualizar el APK y cambiar la zona horaria.
+- Calendario mensual con agenda por día y rutinas ordenadas por hora.
+- Fecha de inicio y fin de las metas, con franjas de colores de la llama y días restantes.
+- Colores aleatorios distintos que se conservan entre aperturas y en los respaldos.
+- Tema, llama animada, estadísticas y cronómetros anteriores conservados.
 
-**Instalación:** descarga `proyecto-de-vida.apk`, ábrelo y permite al navegador instalarlo si Android lo solicita. Requiere Android 6.0 o posterior y Android System WebView actualizado.
+**Actualizar desde 1.0.0:** instala este APK encima del anterior para conservar tus datos. No lo desinstales. El identificador y la firma se mantienen.
 
-**Conservar tu progreso de la web:** en la web abre Ajustes y respaldo → Descargar mis datos. En el APK abre Ajustes y respaldo → Importar un respaldo y selecciona ese JSON. La transferencia se hace una vez de forma manual; los dos almacenamientos son independientes.
+**Ejemplo de aviso:** edita Ejercicio → Hora de inicio: 14:00 → Sonido de alarma → A la hora de inicio. Elige sus días y guarda. En Calendario o Ajustes pulsa Activar avisos y, si aparece, Permitir horarios precisos. Android controla el volumen, No molestar y los canales de sonido; puedes revisarlos en Sonido y permisos de Android.
 
-Esta versión no incluye notificaciones o alarmas con la aplicación cerrada. Al volver, el cronómetro recupera el tiempo transcurrido.
+**Instalación nueva:** descarga proyecto-de-vida.apk, ábrelo y permite la instalación si Android lo solicita. Requiere Android 6.0 o posterior y Android System WebView actualizado. Para trasladar datos desde la web: Ajustes y respaldo → Descargar mis datos; después, en el APK → Importar un respaldo.
 
-El APK está firmado para instalación directa. `proyecto-de-vida.apk.sha256` permite comprobar su integridad. El código fuente completo de esta versión se incluye en los archivos de fuentes de esta publicación (AGPL-3.0).
+El calendario y los datos funcionan sin conexión. En la web los avisos requieren que la página permanezca abierta; el APK usa el programador de Android. El cronómetro mantiene su comportamiento y no añade una alarma de finalización de sesión.
+
+Verificaciones: tests de datos y calendario, pruebas de horarios en JVM, tests Android con Robolectric, navegación móvil con Chromium y verificación de firma del APK. No se ha probado en un teléfono físico.
+
+El APK está firmado para instalación directa. proyecto-de-vida.apk.sha256 permite comprobar su integridad. Las fuentes completas de esta versión se incluyen en los archivos de fuentes de la publicación (AGPL-3.0).

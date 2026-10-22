@@ -1,0 +1,12 @@
+android {
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+            ['user.home', 'https.proxyHost', 'https.proxyPort', 'http.proxyHost', 'http.proxyPort', 'javax.net.ssl.trustStore'].each { name ->
+                if (System.getProperty(name)) systemProperty name, System.getProperty(name)
+            }
+        }
+    }
+}
+dependencies { testImplementation 'org.robolectric:robolectric:4.14.1' }

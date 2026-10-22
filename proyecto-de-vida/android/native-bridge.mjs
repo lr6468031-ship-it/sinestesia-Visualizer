@@ -2,4 +2,5 @@
 import { registerPlugin } from '@capacitor/core';
 
 const backup = registerPlugin('LifeBackup');
-window.proyectoAndroid = Object.freeze({ saveBackup: options => backup.save(options) });
+const reminders = registerPlugin('LifeReminders');
+window.proyectoAndroid = Object.freeze({ saveBackup: options => backup.save(options), reminders: Object.freeze({status:()=>reminders.status(),sync:options=>reminders.sync(options),requestNotifications:()=>reminders.requestNotifications(),openExactSettings:()=>reminders.openExactSettings(),openNotificationSettings:()=>reminders.openNotificationSettings()}) });
