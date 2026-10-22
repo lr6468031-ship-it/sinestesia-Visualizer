@@ -2,6 +2,14 @@
 
 Paquete independiente `com.proyectodevida.app`, versión y código en `version.json`. Usa Capacitor 7 y Android 6.0 o posterior (API 23), con Android System WebView actualizado (Chromium 105 o posterior). Incluye la aplicación, tema, video, módulos adaptados y licencias. No necesita conexión, cuenta ni permisos de almacenamiento general. La navegación web se mantiene disponible por separado.
 
+## Actualización 1.1.1 en preparación
+
+Las fuentes actuales usan `versionCode` 3 e incluyen los hábitos en la intensidad
+de la llama. La publicación 1.1.0 citada a continuación es la anterior; no contiene
+esta corrección. Para publicar 1.1.1, compilar y firmar con la clave original,
+comprobar el certificado y actualizar los metadatos y archivos de `downloads/`.
+No sustituir la firma ni desinstalar la aplicación para aplicar la corrección.
+
 ## Instalar y trasladar datos
 
 Descargar `proyecto-de-vida.apk` de la publicación `proyecto-de-vida-v1.1.0` del repositorio. Android puede pedir autorización al navegador para instalar aplicaciones descargadas. Abrir el APK y aceptar la instalación.

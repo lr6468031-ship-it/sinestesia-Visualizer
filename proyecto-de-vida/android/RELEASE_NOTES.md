@@ -1,3 +1,22 @@
+Proyecto de vida para Android, versión 1.1.1 (código 3).
+
+- La intensidad de la llama combina tareas y hábitos programados para el día.
+- Cada hábito aporta una actividad completada al alcanzar su objetivo; superar
+  el objetivo no lo cuenta dos veces.
+- Desmarcar una tarea o bajar un hábito por debajo del objetivo reduce la llama.
+- Los hábitos en descanso no cuentan como pendientes; se respeta el historial
+  de días y objetivos de cada hábito.
+- Los textos de la llama muestran actividades e incluyen tareas y hábitos.
+- Se conserva el diseño oscuro, la animación y los datos de la versión anterior.
+
+Para instalar encima de 1.1.0 sin perder datos, el APK debe firmarse con la misma
+clave original. Esta revisión de las fuentes no sustituye la firma y publicación
+del APK. No desinstalar la aplicación para actualizarla.
+
+---
+
+## Notas de la publicación anterior: 1.1.0
+
 Proyecto de vida para Android, versión 1.1.0.
 
 - Hora de inicio para cada rutina, independiente de su duración.

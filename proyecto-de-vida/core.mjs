@@ -145,7 +145,9 @@ export function dueTasks(state,day){
  return items;
 }
 export function flameTaskProgress(state,day){
- const completed=completedTasksOn(state,day),pending=dueTasks(state,day).filter(task=>task.status==='todo').length,total=completed+pending;
+ const habits=state.habits.filter(habit=>habitScheduled(habit,day));
+ const completedHabits=habits.filter(habit=>habitDone(habit,day)).length;
+ const completed=completedTasksOn(state,day)+completedHabits,pending=dueTasks(state,day).filter(task=>task.status==='todo').length+habits.length-completedHabits,total=completed+pending;
  return {completed,pending,total,ratio:total?completed/total:0,allCompleted:completed>0&&pending===0};
 }
 export function planTasks(state,day){
