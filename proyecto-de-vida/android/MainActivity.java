@@ -42,5 +42,8 @@ public class MainActivity extends BridgeActivity {
         String day=intent==null?null:intent.getStringExtra("routine_day");
         if(day!=null&&day.matches("\\d{4}-\\d{2}-\\d{2}"))getSharedPreferences("life-reminders",MODE_PRIVATE).edit().putString("openedDay",day).apply();
     }
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);rememberRoutine(intent);}
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);setIntent(intent);rememberRoutine(intent);
+        if(getBridge()!=null)getBridge().getWebView().post(()->getBridge().getWebView().evaluateJavascript("window.dispatchEvent(new Event('focus'));",null));
+    }
 }
