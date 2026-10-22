@@ -1,10 +1,10 @@
 {
-  "version": "1.0.0",
-  "versionCode": 1,
-  "sourceCommit": "ae68b2cc6b0db8c5c9b4f7958f64a0bcb313c0f4",
-  "sha256": "0e28cb33689783a93e3ba2fd6408cc94d8b122fe82ac6e5ce95b05e02b0f0f95",
+  "version": "1.1.0",
+  "versionCode": 2,
+  "sourceCommit": "d49660c85aa53d330d04d2001df1f97247168685",
+  "sha256": "7b0d6873fcdaf278fada84c959d56aac22181ab7f0bcf2b9a971623dc70ab5b1",
   "certificateSha256": "25bd6056b0571f83f7be1f4bbbd12d677e2b9cc99ee233d779cc5a31027dd113",
   "file": "proyecto-de-vida.apk",
-  "sizeBytes": 4695109,
-  "builtAt": "2026-10-21T22:23:31.557616+00:00"
+  "sizeBytes": 4711766,
+  "builtAt": "2026-10-22T02:34:40.607199+00:00"
 }
