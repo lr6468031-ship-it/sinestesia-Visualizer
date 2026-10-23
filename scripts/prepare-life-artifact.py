@@ -8,11 +8,16 @@ import shutil
 import subprocess
 import zipfile
 
+from life_preview_identity import CHANNEL, verify_identity
+
 root = pathlib.Path(__file__).resolve().parent.parent
 version = json.loads((root / 'proyecto-de-vida/android/version.json').read_text())
 filename = f"proyecto-de-vida-{version['name']}-prueba.apk"
 apk = root / 'downloads' / filename
 metadata = json.loads(apk.with_suffix('.json').read_text())
+identity = verify_identity(apk)
+assert metadata['certificateSha256'] == CHANNEL['certificateSha256']
+assert metadata['applicationId'] == identity['applicationId']
 tools = pathlib.Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0'
 assert metadata['version'] == version['name']
 assert metadata['versionCode'] == version['code']
@@ -53,7 +58,7 @@ out.mkdir(parents=True, exist_ok=True)
 shutil.copyfile(apk, out / filename)
 shutil.copyfile(apk.with_name(filename + '.sha256'), out / (filename + '.sha256'))
 (out / 'version.json').write_text(json.dumps(metadata, indent=2) + '\n')
-(out / 'LEEME.txt').write_text('Proyecto de vida actualizado de prueba. Se instala aparte. No desinstales la original. Para copiar tus registros: exporta un respaldo en la original e impórtalo en la prueba.\n')
+(out / 'LEEME.txt').write_text('Proyecto de vida actualizado de prueba. La primera instalación se hace aparte de la original 1.1.0; para trasladar los registros, exporta un respaldo de la original e impórtalo en la prueba. Las futuras versiones de esta misma prueba deben actualizarse encima, conservando paquete y firma y aumentando versionCode. No desinstales ni borres los datos para actualizar.\n')
 if os.environ.get('GITHUB_OUTPUT'):
     with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
         stream.write(f"name=proyecto-de-vida-{version['name']}-prueba\n")

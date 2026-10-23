@@ -20,7 +20,13 @@ se instala aparte de la aplicación original, porque en este entorno no está la
 clave original de publicación. No desinstalar la original. Para copiar los datos,
 exportar un respaldo desde la original e importarlo en la versión de prueba.
 
-Para reproducir el paquete de prueba:
+Las siguientes versiones de **esta aplicación de prueba** deben instalarse encima
+de la 1.1.3 ya entregada. Se conserva su misma firma y paquete; cada entrega debe
+aumentar el código de versión. La configuración está fijada en el repositorio y
+la clave privada se conserva fuera de Git en este entorno. Procedimiento y traslado
+de la firma a otro entorno: [Actualizaciones](ACTUALIZACIONES.md).
+
+Para compilar y firmar futuras actualizaciones de la prueba:
 
 ```sh
 npm ci
@@ -28,14 +34,19 @@ node --test proyecto-de-vida/tests/*.test.mjs
 npm run build:life:android
 node scripts/configure-life-preview.mjs
 cd .cache/life-android/android
-./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --max-workers=2
+./gradlew :app:testDebugUnitTest :app:assembleRelease --no-daemon --max-workers=2
+# Desde la raíz, después de incrementar la versión y guardar las fuentes:
+# python3 scripts/sign-life-preview.py
 ```
 
 El empaquetado de prueba modifica solo el proyecto generado en `.cache/`. Mantiene
 la implementación de Java y usa un identificador, etiqueta y proveedor de archivos
-propios. El APK debug queda firmado para instalación; no requiere la clave privada
-de la publicación original. `build-info.json` dentro del APK identifica exactamente
-qué revisión y versión se compilaron.
+propios. El APK release se firma con la clave conservada de la prueba mediante
+`scripts/sign-life-preview.py`; el APK debug de otra máquina tiene otra firma y no
+debe entregarse como actualización. No se requiere la clave de la publicación
+original. `build-info.json` dentro del APK identifica qué revisión y versión se
+compilaron. GitHub Actions valida el paquete firmado guardado y lo incluye en
+Artefactos, sin generar una firma de reemplazo.
 
 ## Actualización 1.1.3 en preparación
 

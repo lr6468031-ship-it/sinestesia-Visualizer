@@ -3,3 +3,10 @@ node_modules/
 separator-assets/
 dist/
 www/
+__pycache__/
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.storepass
+*-private-signing/

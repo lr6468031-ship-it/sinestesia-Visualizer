@@ -8,6 +8,9 @@ on:
       - 'scripts/build-life-android.mjs'
       - 'scripts/configure-life-preview.mjs'
       - 'scripts/prepare-life-artifact.py'
+      - 'scripts/life_preview_identity.py'
+      - 'scripts/sign-life-preview.py'
+      - '.github/life-preview-channel.json'
       - 'downloads/proyecto-de-vida-*-prueba*'
       - 'package.json'
       - 'package-lock.json'
@@ -44,9 +47,11 @@ jobs:
         run: |
           npm run build:life:android
           node scripts/configure-life-preview.mjs
-      - name: Build signed test APK
+      # Signing for distribution is done privately with the existing key.
+      # A new runner's debug key must never replace the installed app's signer.
+      - name: Validate native tests and release compilation
         working-directory: .cache/life-android/android
-        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --max-workers=2
+        run: ./gradlew :app:testDebugUnitTest :app:assembleRelease --no-daemon --max-workers=2
       - name: Verify exact version and source, then prepare download
         id: artifact
         run: python3 scripts/prepare-life-artifact.py

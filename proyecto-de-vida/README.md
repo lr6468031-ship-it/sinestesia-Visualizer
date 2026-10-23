@@ -29,6 +29,12 @@ la aplicación original en el teléfono. Para llevar los registros: exportar un
 respaldo desde la original e importarlo en la prueba. Detalles y compilación en
 [Android](android/README.md).
 
+Desde esta 1.1.3 de prueba, los siguientes diseños y funciones se entregarán como
+actualizaciones de la misma aplicación, conservando paquete, firma y registros.
+La política y los pasos de publicación quedan guardados en
+[Actualizaciones](android/ACTUALIZACIONES.md). La clave privada está fuera del
+repositorio; debe trasladarse de forma privada si se cambia de entorno.
+
 ## Versión Android
 
 El APK independiente incluye todos los archivos para funcionar sin conexión desde el primer inicio. Compilación, firma, instalación y traslado de datos de la web: [android/README.md](android/README.md). Se instala como **Proyecto de vida** (`com.proyectodevida.app`).
